@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1d4ed8">
+  <title>Absensi Karyawan</title>
+  <meta name="description" content="Aplikasi absensi mobile dengan validasi lokasi GPS dan selfie, berbasis Google Sheets.">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Absensi">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ============================================================ -->
+  <!-- Splash (Tahap 1): tampil sebelum JS memutuskan sesi/login     -->
+  <!-- ============================================================ -->
+  <div class="splash" id="screen-splash" role="status" aria-label="Memuat aplikasi">
+    <div class="splash-logo" aria-hidden="true">✓</div>
+    <h1 class="splash-title">Absensi Karyawan</h1>
+    <div class="spinner" aria-hidden="true"></div>
+    <p class="splash-sub">Memuat…</p>
+  </div>
+  <noscript><style>#screen-splash{display:none!important}</style></noscript>
+  <script>
+    // Jaring pengaman: bila app.js gagal dimuat, splash tidak menutupi layar selamanya.
+    setTimeout(function () {
+      var s = document.getElementById('screen-splash');
+      if (s) s.hidden = true;
+    }, 4000);
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- Layar Login                                                   -->
+  <!-- ============================================================ -->
+  <div class="screen-login" id="screen-login">
+    <div class="login-card">
+      <div class="login-logo" aria-hidden="true">✓</div>
+      <h1 class="login-title">Absensi Karyawan</h1>
+      <p class="login-sub">Masuk dengan username dan PIN Anda.</p>
+
+      <form id="form-login" autocomplete="off" novalidate>
+        <label class="field">
+          <span>Username</span>
+          <input type="text" id="login-username" name="username"
+                 autocapitalize="none" autocorrect="off" autocomplete="username"
+                 inputmode="text" required maxlength="40" placeholder="contoh: admin">
+        </label>
+        <label class="field">
+          <span>PIN</span>
+          <input type="password" id="login-pin" name="pin"
+                 inputmode="numeric" pattern="[0-9]*" maxlength="12"
+                 autocomplete="current-password" placeholder="••••••" required>
+        </label>
+
+        <p class="form-error" id="login-error" hidden role="alert"></p>
+
+        <button type="submit" class="btn btn-primary btn-block" id="btn-login">Masuk</button>
+      </form>
+
+      <p class="privacy-note">
+        🔒 Dengan masuk, Anda memahami bahwa <strong>lokasi GPS</strong> dan
+        <strong>foto selfie</strong> dikumpulkan aplikasi ini untuk keperluan absensi.
+      </p>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- Aplikasi utama (diisi oleh app.js)                            -->
+  <!-- ============================================================ -->
+  <div class="app" id="app" hidden>
+    <header class="topbar">
+      <div class="topbar-text">
+        <div class="topbar-title" id="topbar-title">Beranda</div>
+        <div class="topbar-sub" id="topbar-sub"></div>
+      </div>
+      <span class="role-badge" id="role-badge" hidden></span>
+    </header>
+
+    <main class="content" id="content" tabindex="-1">
+      <div class="loading-state" id="content-loading">
+        <div class="spinner" aria-label="Memuat"></div>
+        <p>Memuat…</p>
+      </div>
+    </main>
+
+    <nav class="tabbar" id="tabbar" aria-label="Menu utama"></nav>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- Overlay layar bertahap absen (bagian 11 PRD: 5 langkah)       -->
+  <!-- ============================================================ -->
+  <div class="overlay" id="overlay-absen" hidden role="dialog" aria-modal="true" aria-label="Alur absen">
+    <div class="sheet">
+      <div class="sheet-head">
+        <div class="stepper" id="absen-stepper" aria-hidden="true"></div>
+        <h2 id="absen-title">Absen</h2>
+        <button type="button" class="icon-btn" id="absen-close" aria-label="Tutup">✕</button>
+      </div>
+      <div class="sheet-body" id="absen-body"></div>
+      <div class="sheet-foot" id="absen-foot" hidden></div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- Overlay modal umum (form CRUD, koreksi, konfirmasi)           -->
+  <!-- ============================================================ -->
+  <div class="overlay" id="overlay-modal" hidden role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="modal-head">
+        <h2 id="modal-title">Formulir</h2>
+        <button type="button" class="icon-btn" id="modal-close" aria-label="Tutup">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Toast pesan -->
+  <div class="toast" id="toast" hidden aria-live="polite"></div>
+
+  <script src="api.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
