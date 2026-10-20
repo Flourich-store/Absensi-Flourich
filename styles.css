@@ -234,6 +234,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
   transition: transform .15s ease;
 }
 .tab:active .tab-ico svg { transform: scale(.9); }
+
+/* Ikon garis di dalam teks (banner, baris info, pil status, tombol).
+   Ukurannya mengikuti font dan warnanya ikut teks lewat currentColor. */
+.ico {
+  width: 1.05em;
+  height: 1.05em;
+  display: inline-block;
+  vertical-align: -.17em;
+  flex: none;
+}
+.btn .ico, .status-pill .ico { margin-right: 2px; vertical-align: -.18em; }
+.row-meta .ico, .kv .ico, .banner .ico { opacity: .9; }
 .tab.is-active { color: var(--biru); font-weight: 700; }
 .tab.is-active .tab-ico { background: var(--biru-muda); }
 
@@ -377,14 +389,16 @@ table.data td.wrap { white-space: normal; min-width: 160px; }
 }
 .state-ico {
   width: 56px; height: 56px;
-  line-height: 56px;
   border-radius: 50%;
   background: var(--biru-muda);
-  display: block;
+  color: var(--biru);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   margin: 0 auto 10px;
-  font-size: 26px;
 }
-.error-state .state-ico { background: var(--merah-bg); }
+.state-ico svg { width: 26px; height: 26px; display: block; }
+.error-state .state-ico { background: var(--merah-bg); color: var(--merah); }
 .spinner {
   width: 30px; height: 30px;
   margin: 0 auto 8px;

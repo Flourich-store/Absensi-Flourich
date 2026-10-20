@@ -5,7 +5,7 @@
  * "mode offline" di luar cakupan (bagian 5 PRD).
  */
 
-var CACHE = 'absensi-shell-v6'; // Tahap 6: ikon tab SVG (menggantikan emoji)
+var CACHE = 'absensi-shell-v7'; // Tahap 7: semua emoji diganti ikon SVG
 var SHELL = [
   './',
   './index.html',

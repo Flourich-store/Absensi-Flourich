@@ -104,7 +104,7 @@ function emptyHTML(ico, pesan) {
     '</span><p>' + esc(pesan) + '</p></div>';
 }
 function errorHTML(pesan) {
-  return '<div class="error-state"><span class="state-ico" aria-hidden="true">⚠️</span><p>' +
+  return '<div class="error-state"><span class="state-ico" aria-hidden="true">' + ikonSvg('peringatan') + '</span><p>' +
     esc(pesan) + '</p><button type="button" class="btn btn-outline btn-sm mt" id="btn-coba-lagi">Coba Lagi</button></div>';
 }
 
@@ -331,14 +331,63 @@ var IKON = {
     '<polyline points="21.5 12.5 18 12.5 15.2 20 8.8 4 6 12.5 2.5 12.5"/>',
   profil:
     '<path d="M20 21v-1.8a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4V21"/>' +
-    '<circle cx="12" cy="7.3" r="4"/>'
+    '<circle cx="12" cy="7.3" r="4"/>',
+
+  /* --- ikon di dalam konten (banner, status, baris, tombol) --- */
+  peringatan:
+    '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>' +
+    '<line x1="12" y1="9.4" x2="12" y2="13.6"/>' +
+    '<line x1="12" y1="17" x2="12" y2="17.1"/>',
+  kunci:
+    '<rect x="4.5" y="10.4" width="15" height="10.6" rx="2.6"/>' +
+    '<path d="M8.2 10.4V7.2a3.8 3.8 0 0 1 7.6 0v3.2"/>' +
+    '<line x1="12" y1="14.8" x2="12" y2="16.8"/>',
+  kalender:
+    '<rect x="3" y="5" width="18" height="16.6" rx="2.6"/>' +
+    '<line x1="8" y1="3" x2="8" y2="7.4"/>' +
+    '<line x1="16" y1="3" x2="16" y2="7.4"/>' +
+    '<line x1="3" y1="10.4" x2="21" y2="10.4"/>',
+  libur:
+    '<rect x="3" y="5" width="18" height="16.6" rx="2.6"/>' +
+    '<line x1="8" y1="3" x2="8" y2="7.4"/>' +
+    '<line x1="16" y1="3" x2="16" y2="7.4"/>' +
+    '<line x1="3" y1="10.4" x2="21" y2="10.4"/>' +
+    '<line x1="9.2" y1="15.8" x2="14.8" y2="15.8"/>',
+  'centang-lingkar':
+    '<circle cx="12" cy="12" r="9"/>' +
+    '<polyline points="8.2 12.3 11 15.1 16 10.1"/>',
+  'silang-lingkar':
+    '<circle cx="12" cy="12" r="9"/>' +
+    '<line x1="9.3" y1="9.3" x2="14.7" y2="14.7"/>' +
+    '<line x1="14.7" y1="9.3" x2="9.3" y2="14.7"/>',
+  'kotak-kosong':
+    '<polyline points="21.6 12.6 16 12.6 14 16.3 10 16.3 8 12.6 2.4 12.6"/>' +
+    '<path d="M5.9 4.9 2.4 12.6v5.6a2 2 0 0 0 2 2h15.2a2 2 0 0 0 2-2v-5.6l-3.5-7.7a2 2 0 0 0-1.8-1.2H7.7a2 2 0 0 0-1.8 1.2Z"/>',
+  pensil:
+    '<path d="M12 20.5h9"/>' +
+    '<path d="M16.6 3.4a2.1 2.1 0 0 1 3 3L7.6 18.4l-4.1 1.1 1.1-4.1Z"/>',
+  kamera:
+    '<path d="M22 18.4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8.8a2 2 0 0 1 2-2h3.3l1.6-2.4a2 2 0 0 1 1.7-.9h2.8a2 2 0 0 1 1.7.9l1.6 2.4H20a2 2 0 0 1 2 2Z"/>' +
+    '<circle cx="12" cy="13.4" r="3.6"/>',
+  bumi:
+    '<circle cx="12" cy="12" r="9"/>' +
+    '<line x1="3" y1="12" x2="21" y2="12"/>' +
+    '<path d="M12 3a13.5 13.5 0 0 1 0 18 13.5 13.5 0 0 1 0-18Z"/>',
+  unduh:
+    '<path d="M21 15.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3.6"/>' +
+    '<polyline points="7.6 10.4 12 14.8 16.4 10.4"/>' +
+    '<line x1="12" y1="3" x2="12" y2="14.8"/>'
 };
 
-/** Bungkus isi ikon jadi <svg> bergaris yang ikut warna teks (currentColor). */
-function ikonSvg(nama) {
-  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
-    'stroke-linecap="round" stroke-linejoin="round" focusable="false">' +
-    (IKON[nama] || IKON.beranda) + '</svg>';
+/**
+ * Bungkus isi ikon jadi <svg> bergaris yang ikut warna teks (currentColor).
+ * Kelas `ico` mengatur ukuran ikon di dalam teks; pada tabbar ukuran diatur
+ * `.tab .tab-ico svg` yang lebih spesifik.
+ */
+function ikonSvg(nama, kelas) {
+  return '<svg class="' + (kelas || 'ico') + '" viewBox="0 0 24 24" fill="none" ' +
+    'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" ' +
+    'stroke-linejoin="round" focusable="false">' + (IKON[nama] || IKON.beranda) + '</svg>';
 }
 
 var TAB_KARYAWAN = [
@@ -451,15 +500,15 @@ function berandaHTML(h, user) {
 
   var banner = '';
   if (user && (user.wajib_ganti_pin || (h && h.wajib_ganti_pin))) {
-    banner = '<div class="banner">🔑 Anda wajib mengganti PIN setelah login. ' +
+    banner = '<div class="banner">' + ikonSvg('kunci') + ' Anda wajib mengganti PIN setelah login. ' +
       '<button type="button" class="btn-text" id="btn-ke-ganti-pin" style="color:inherit;text-decoration:underline">Ganti PIN sekarang</button></div>';
   }
   if (h.status === 'libur') {
     var ket = h.hari_libur ? (h.hari_libur.keterangan || 'Hari libur') : 'Bukan hari kerja';
-    banner += '<div class="banner info">👒 Hari libur: ' + esc(ket) + '. Absen tidak diperlukan.</div>';
+    banner += '<div class="banner info">' + ikonSvg('libur') + ' Hari libur: ' + esc(ket) + '. Absen tidak diperlukan.</div>';
   }
   if (h.status === 'izin' && h.izin) {
-    banner += '<div class="banner info">📗 Izin ' + esc(h.izin.jenis) + ' disetujui (' +
+    banner += '<div class="banner info">' + ikonSvg('centang-lingkar') + ' Izin ' + esc(h.izin.jenis) + ' disetujui (' +
       esc(tampilTanggal(h.izin.tanggal_mulai)) + ' s/d ' + esc(tampilTanggal(h.izin.tanggal_selesai)) + ').</div>';
   }
 
@@ -617,14 +666,14 @@ function lanjutPreview(posisi, galat) {
     a.hasil = hasil;
     var b;
     if (hasil.valid) {
-      b = '<div class="card"><p class="card-title">📍 ' + esc(hasil.lokasi ? hasil.lokasi.nama_lokasi : 'Lokasi kerja') + '</p>' +
+      b = '<div class="card"><p class="card-title">' + ikonSvg('lokasi') + ' ' + esc(hasil.lokasi ? hasil.lokasi.nama_lokasi : 'Lokasi kerja') + '</p>' +
         '<div class="kv"><span>Jarak Anda ke lokasi</span><b class="jarak-besar">' + hasil.jarak_m + ' m</b></div>' +
         '<div class="kv"><span>Radius absen</span><b>' + hasil.radius_m + ' m</b></div>' +
         '<div class="kv"><span>Akurasi GPS</span><b>' + hasil.akurasi + ' m (maks ' + hasil.akurasi_maks_m + ' m)</b></div>' +
         '</div>' +
         (hasil.terlambat
           ? '<div class="banner">⏰ Anda terlambat — alasan keterlambatan wajib diisi pada langkah berikutnya.</div>'
-          : '<div class="banner info">✅ Lokasi valid. Anda dapat melanjutkan ke selfie.</div>');
+          : '<div class="banner info">' + ikonSvg('centang-lingkar') + ' Lokasi valid. Anda dapat melanjutkan ke selfie.</div>');
     } else {
       b = '<div class="banner error"><strong>' + esc(kodeJudul(hasil.code)) + '</strong><br>' + esc(hasil.pesan) + '</div>';
       if (hasil.jarak_m !== null && hasil.radius_m !== null) {
@@ -944,7 +993,7 @@ function renderLangkahHasil(body, foot) {
     var d = a.kirimSukses;
     body.innerHTML =
       '<div class="status-hero" style="border-color:#86efac">' +
-        '<div class="status-pill ok" style="font-size:15px">✔ ' +
+        '<div class="status-pill ok" style="font-size:15px">' + ikonSvg('centang-lingkar') + ' ' +
         (a.jenis === 'masuk' ? 'Absen Masuk Berhasil' : 'Absen Pulang Berhasil') + '</div>' +
         '<div class="status-baris">' + esc(tglIndonesia(new Date())) + '</div>' +
       '</div>' +
@@ -955,7 +1004,7 @@ function renderLangkahHasil(body, foot) {
             (d.alasan_terlambat ? '<div class="kv"><span>Alasan</span><b>' + esc(d.alasan_terlambat) + '</b></div>' : '')
           : '<div class="kv"><span>Jam pulang</span><b>' + esc(tampilJam(d.jam_pulang) || '') + '</b></div>') +
         '<div class="kv"><span>Jarak tercatat</span><b>' + esc(d.jarak_m) + ' m</b></div>' +
-        '<div class="kv"><span>Foto</span><b>Tersimpan di Drive ✓</b></div>' +
+        '<div class="kv"><span>Foto</span><b>Tersimpan di Drive ' + ikonSvg('centang-lingkar') + '</b></div>' +
       '</div>';
     foot.hidden = false;
     foot.innerHTML = '<button type="button" class="btn btn-primary btn-block" id="absen-selesai">Selesai</button>';
@@ -968,7 +1017,7 @@ function renderLangkahHasil(body, foot) {
 
   // gagal — tampilkan pesan error, tanpa data setengah jadi
   body.innerHTML =
-    '<div class="banner error"><strong>❌ Absen ' + (a.jenis === 'masuk' ? 'masuk' : 'pulang') + ' gagal.</strong><br>' +
+    '<div class="banner error"><strong>' + ikonSvg('silang-lingkar') + ' Absen ' + (a.jenis === 'masuk' ? 'masuk' : 'pulang') + ' gagal.</strong><br>' +
     esc(a.kirimGagal || 'Terjadi kesalahan.') + '</div>' +
     (a.kirimKode === 'DI_LUAR_RADIUS' || a.kirimKode === 'AKURASI_BURUK'
       ? '<div class="card small muted">Pindah lebih dekat ke lokasi kerja / ke tempat terbuka agar GPS akurat, ' +
@@ -1071,13 +1120,13 @@ function muatDaftarIzin() {
     .then(function (data) {
       var daftar = (data && data.daftar) || [];
       if (!daftar.length) {
-        kotak.innerHTML = emptyHTML('📭', 'Belum ada izin yang Anda ajukan.');
+        kotak.innerHTML = emptyHTML(ikonSvg('kotak-kosong'), 'Belum ada izin yang Anda ajukan.');
         return;
       }
       kotak.innerHTML = daftar.map(function (r) {
         return '<div class="row-item">' +
           '<div class="row-head"><span class="row-name">' + esc(r.jenis) + '</span>' + badgeIzin(r.status) + '</div>' +
-          '<div class="row-meta">📅 ' + esc(tampilTanggal(r.tanggal_mulai)) + ' s/d ' + esc(tampilTanggal(r.tanggal_selesai)) + '</div>' +
+          '<div class="row-meta">' + ikonSvg('kalender') + ' ' + esc(tampilTanggal(r.tanggal_mulai)) + ' s/d ' + esc(tampilTanggal(r.tanggal_selesai)) + '</div>' +
           '<div class="row-meta">' + esc(r.alasan) + '</div>' +
           (r.status === 'Menunggu' ?
             '<div class="btn-row"><button type="button" class="btn btn-outline btn-sm" data-batal="' + esc(r.id_izin) + '">Batalkan</button></div>' : '') +
@@ -1136,7 +1185,7 @@ function muatRiwayat() {
 
       html += '<p class="card-title">Absensi ' + esc(bulan) + '</p>';
       if (!absen.length) {
-        html += emptyHTML('🗓️', 'Tidak ada data absensi pada bulan ini.');
+        html += emptyHTML(ikonSvg('absensi'), 'Tidak ada data absensi pada bulan ini.');
       } else {
         html += absen.map(function (r) {
           var st = r.status === 'Terlambat' ? 'terlambat' : 'hadir';
@@ -1146,19 +1195,19 @@ function muatRiwayat() {
             '<div class="row-meta">Masuk ' + esc(tampilJam(r.jam_masuk) || '—') +
             ' · Pulang ' + esc(tampilJam(r.jam_pulang) || 'Belum Absen Pulang') + '</div>' +
             (r.alasan_terlambat ? '<div class="row-meta">Alasan: ' + esc(r.alasan_terlambat) + '</div>' : '') +
-            (r.dikoreksi ? '<div class="row-meta">✏️ Dikoreksi admin</div>' : '') +
+            (r.dikoreksi ? '<div class="row-meta">' + ikonSvg('pensil') + ' Dikoreksi admin</div>' : '') +
           '</div>';
         }).join('');
       }
 
       html += '<p class="card-title mt">Izin</p>';
       if (!izin.length) {
-        html += emptyHTML('📭', 'Tidak ada izin pada bulan ini.');
+        html += emptyHTML(ikonSvg('kotak-kosong'), 'Tidak ada izin pada bulan ini.');
       } else {
         html += izin.map(function (r) {
           return '<div class="row-item">' +
             '<div class="row-head"><span class="row-name">' + esc(r.jenis) + '</span>' + badgeIzin(r.status) + '</div>' +
-            '<div class="row-meta">📅 ' + esc(tampilTanggal(r.tanggal_mulai)) + ' s/d ' + esc(tampilTanggal(r.tanggal_selesai)) + ' — ' + esc(r.alasan) + '</div>' +
+            '<div class="row-meta">' + ikonSvg('kalender') + ' ' + esc(tampilTanggal(r.tanggal_mulai)) + ' s/d ' + esc(tampilTanggal(r.tanggal_selesai)) + ' — ' + esc(r.alasan) + '</div>' +
           '</div>';
         }).join('');
       }
@@ -1188,7 +1237,7 @@ SCREENS.profil = {
         '<div><div style="font-weight:700">' + esc(u.nama || '') + '</div>' +
         '<div class="small muted">' + esc(u.id_karyawan || '') + ' · role ' + esc(u.role || '') + '</div></div>' +
       '</div>' +
-      (wajib ? '<div class="banner">🔑 PIN masih PIN sementara. Anda <strong>wajib mengganti PIN</strong> sekarang.</div>' : '') +
+      (wajib ? '<div class="banner">' + ikonSvg('kunci') + ' PIN masih PIN sementara. Anda <strong>wajib mengganti PIN</strong> sekarang.</div>' : '') +
       '<div class="card' + (wajib ? ' ganti-pin-aktif' : '') + '"><p class="card-title">Ganti PIN</p>' +
       '<form id="form-ganti-pin" novalidate>' +
         '<label class="field"><span>PIN lama</span>' +
@@ -1275,7 +1324,7 @@ SCREENS.dashboard = {
         var j = d.jumlah;
         var html =
           '<div class="banner info">' + esc(tglIndonesia(tanggalLokal(d.tanggal))) + ' · pukul ' + esc(d.jam_sekarang) +
-          (d.hari_libur ? ' · 🕶 libur: ' + esc(d.hari_libur.keterangan || 'Hari libur') : (d.hari_kerja ? '' : ' · bukan hari kerja')) + '</div>' +
+          (d.hari_libur ? ' · ' + ikonSvg('libur') + ' libur: ' + esc(d.hari_libur.keterangan || 'Hari libur') : (d.hari_kerja ? '' : ' · bukan hari kerja')) + '</div>' +
           '<div class="stat-grid">' +
             '<div class="stat hadir"><b>' + j.hadir + '</b><span>Hadir</span></div>' +
             '<div class="stat terlambat"><b>' + j.terlambat + '</b><span>Terlambat</span></div>' +
@@ -1283,7 +1332,7 @@ SCREENS.dashboard = {
             '<div class="stat belum"><b>' + j.belum_absen + '</b><span>Belum Absen</span></div>' +
           '</div>';
         if (!d.karyawan.length) {
-          html += emptyHTML('👥', 'Belum ada karyawan. Tambahkan lewat menu Karyawan.');
+          html += emptyHTML(ikonSvg('karyawan'), 'Belum ada karyawan. Tambahkan lewat menu Karyawan.');
         } else {
           html += '<div class="table-wrap"><table class="data"><thead><tr>' +
             '<th>Nama</th><th>Status</th><th>Masuk</th><th>Pulang</th><th>Keterangan</th>' +
@@ -1370,13 +1419,13 @@ function muatAbsensi() {
 function renderAbsensi(kotak) {
   var daftar = absensiState.daftar;
   if (!daftar.length) {
-    kotak.innerHTML = emptyHTML('🗓️', 'Tidak ada data absensi pada rentang tanggal ini.');
+    kotak.innerHTML = emptyHTML(ikonSvg('absensi'), 'Tidak ada data absensi pada rentang tanggal ini.');
     return;
   }
   kotak.innerHTML = daftar.map(function (r) {
     var foto = '';
-    if (r.link_foto_masuk) foto += '<a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="' + esc(r.link_foto_masuk) + '">📷 Foto Masuk</a> ';
-    if (r.link_foto_pulang) foto += '<a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="' + esc(r.link_foto_pulang) + '">📷 Foto Pulang</a>';
+    if (r.link_foto_masuk) foto += '<a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="' + esc(r.link_foto_masuk) + '">' + ikonSvg('kamera') + ' Foto Masuk</a> ';
+    if (r.link_foto_pulang) foto += '<a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="' + esc(r.link_foto_pulang) + '">' + ikonSvg('kamera') + ' Foto Pulang</a>';
     if (!foto) foto = '<span class="small muted">—</span>';
     return '<div class="row-item">' +
       '<div class="row-head"><span class="row-name">' + esc(tampilTanggal(r.tanggal)) + ' · ' + esc(r.nama) + '</span>' + badgeStatusAbsen(r.status) + '</div>' +
@@ -1384,7 +1433,7 @@ function renderAbsensi(kotak) {
       ' · Pulang ' + esc(tampilJam(r.jam_pulang) || 'Belum Absen Pulang') +
       (r.jarak_masuk_m !== null ? ' · jarak ' + r.jarak_masuk_m + ' m' : '') + '</div>' +
       (r.alasan_terlambat ? '<div class="row-meta">Alasan terlambat: ' + esc(r.alasan_terlambat) + '</div>' : '') +
-      (r.dikoreksi ? '<div class="row-meta">✏️ Dikoreksi — ' + esc(r.catatan_koreksi) + '</div>' : '') +
+      (r.dikoreksi ? '<div class="row-meta">' + ikonSvg('pensil') + ' Dikoreksi — ' + esc(r.catatan_koreksi) + '</div>' : '') +
       '<div class="btn-row">' + foto + '</div>' +
       '<div class="btn-row">' +
         '<button type="button" class="btn btn-primary btn-sm" data-koreksi="' + esc(r.id_absen) + '">Koreksi</button>' +
@@ -1482,13 +1531,13 @@ function muatPersetujuan() {
     .then(function (data) {
       var daftar = data.daftar || [];
       if (!daftar.length) {
-        kotak.innerHTML = emptyHTML('✅', status === 'Menunggu' ? 'Tidak ada izin yang menunggu persetujuan.' : 'Tidak ada izin dengan filter ini.');
+        kotak.innerHTML = emptyHTML(ikonSvg('persetujuan'), status === 'Menunggu' ? 'Tidak ada izin yang menunggu persetujuan.' : 'Tidak ada izin dengan filter ini.');
         return;
       }
       kotak.innerHTML = daftar.map(function (r) {
         return '<div class="row-item">' +
           '<div class="row-head"><span class="row-name">' + esc(r.nama) + ' · ' + esc(r.jenis) + '</span>' + badgeIzin(r.status) + '</div>' +
-          '<div class="row-meta">📅 ' + esc(tampilTanggal(r.tanggal_mulai)) + ' s/d ' + esc(tampilTanggal(r.tanggal_selesai)) + '</div>' +
+          '<div class="row-meta">' + ikonSvg('kalender') + ' ' + esc(tampilTanggal(r.tanggal_mulai)) + ' s/d ' + esc(tampilTanggal(r.tanggal_selesai)) + '</div>' +
           '<div class="row-meta">' + esc(r.alasan) + '</div>' +
           (r.catatan_admin ? '<div class="row-meta">Catatan: ' + esc(r.catatan_admin) + '</div>' : '') +
           (r.status === 'Menunggu' ?
@@ -1514,7 +1563,7 @@ function muatPersetujuan() {
 
 function bukaProsesIzin(id, keputusan) {
   var html =
-    '<p>Keputusan: <strong>' + (keputusan === 'Disetujui' ? '✅ Disetujui' : '❌ Ditolak') + '</strong></p>' +
+    '<p>Keputusan: <strong>' + (keputusan === 'Disetujui' ? ikonSvg('centang-lingkar') + ' Disetujui' : ikonSvg('silang-lingkar') + ' Ditolak') + '</strong></p>' +
     '<label class="field"><span>Catatan admin (opsional)</span>' +
     '<textarea id="pr-catatan" maxlength="500" placeholder="' + (keputusan === 'Ditolak' ? 'Tuliskan alasan penolakan' : 'Catatan tambahan bila ada') + '"></textarea></label>' +
     '<button type="button" class="btn ' + (keputusan === 'Disetujui' ? 'btn-success' : 'btn-danger') +
@@ -1565,7 +1614,7 @@ function muatKaryawan() {
       dataKaryawan = hasil[0].daftar || [];
       dataLokasiUntukForm = (hasil[1].daftar || []).filter(function (l) { return l.status_aktif; });
       if (!dataKaryawan.length) {
-        kotak.innerHTML = emptyHTML('👥', 'Belum ada karyawan. Tekan Tambah Karyawan.');
+        kotak.innerHTML = emptyHTML(ikonSvg('karyawan'), 'Belum ada karyawan. Tekan Tambah Karyawan.');
         return;
       }
       kotak.innerHTML = dataKaryawan.map(function (k) {
@@ -1575,7 +1624,7 @@ function muatKaryawan() {
           (k.status_aktif ? 'Aktif' : 'Nonaktif') + '</span></div>' +
           '<div class="row-meta">@' + esc(k.username) + ' · ' + esc(k.jabatan || '—') + ' · role ' + esc(k.role) + '</div>' +
           '<div class="row-meta">' + esc(k.id_karyawan) + ' · lokasi ' + esc(k.nama_lokasi || k.id_lokasi || '—') + '</div>' +
-          (k.wajib_ganti_pin ? '<div class="row-meta">🔑 Wajib ganti PIN (belum login ganti)</div>' : '') +
+          (k.wajib_ganti_pin ? '<div class="row-meta">' + ikonSvg('kunci') + ' Wajib ganti PIN (belum login ganti)</div>' : '') +
           '<div class="btn-row">' +
             '<button type="button" class="btn btn-outline btn-sm" data-ubah="' + esc(k.id_karyawan) + '">Ubah</button>' +
             '<button type="button" class="btn btn-outline btn-sm" data-reset="' + esc(k.id_karyawan) + '">Reset PIN</button>' +
@@ -1677,7 +1726,7 @@ function resetPinKaryawan(id) {
   api('karyawan_reset_pin', { id_karyawan: id })
     .then(function (d) {
       var html =
-        '<div class="banner">🔑 <strong>PIN sementara untuk ' + esc(d.nama) + ':</strong></div>' +
+        '<div class="banner">' + ikonSvg('kunci') + ' <strong>PIN sementara untuk ' + esc(d.nama) + ':</strong></div>' +
         '<p class="center" style="font-size:30px;font-weight:800;letter-spacing:6px">' + esc(d.pin) + '</p>' +
         '<p class="small muted center">PIN ini <strong>hanya ditampilkan sekali</strong>. ' +
         'Sampaikan ke karyawan; ia wajib mengganti PIN setelah login pertama.</p>' +
@@ -1711,14 +1760,14 @@ function muatLokasi() {
     .then(function (data) {
       var daftar = data.daftar || [];
       if (!daftar.length) {
-        kotak.innerHTML = emptyHTML('📍', 'Belum ada lokasi. Tekan Tambah Lokasi lalu isi koordinat (atau Pakai Lokasi Saya).');
+        kotak.innerHTML = emptyHTML(ikonSvg('lokasi'), 'Belum ada lokasi. Tekan Tambah Lokasi lalu isi koordinat (atau Pakai Lokasi Saya).');
         return;
       }
       kotak.innerHTML = daftar.map(function (l) {
         return '<div class="row-item">' +
           '<div class="row-head"><span class="row-name">' + esc(l.nama_lokasi) + '</span>' +
           '<span class="badge ' + (l.status_aktif ? 'aktif' : 'nonaktif') + '">' + (l.status_aktif ? 'Aktif' : 'Nonaktif') + '</span></div>' +
-          '<div class="row-meta">🌐 ' + l.latitude + ', ' + l.longitude + ' · radius ' + l.radius_m + ' m</div>' +
+          '<div class="row-meta">' + ikonSvg('bumi') + ' ' + l.latitude + ', ' + l.longitude + ' · radius ' + l.radius_m + ' m</div>' +
           '<div class="row-meta">' + l.karyawan_aktif + ' karyawan aktif</div>' +
           '<div class="btn-row">' +
             '<button type="button" class="btn btn-outline btn-sm" data-lok-ubah="' + esc(l.id_lokasi) + '">Ubah</button>' +
@@ -1756,7 +1805,7 @@ function bukaFormLokasi(l) {
       '<label class="field"><span>Nama lokasi</span><input type="text" id="lok-nama" maxlength="100" value="' + esc(baru ? '' : l.nama_lokasi) + '" required></label>' +
       '<label class="field"><span>Latitude</span><input type="text" inputmode="decimal" id="lok-lat" value="' + esc(baru ? '' : l.latitude) + '" required></label>' +
       '<label class="field"><span>Longitude</span><input type="text" inputmode="decimal" id="lok-lng" value="' + esc(baru ? '' : l.longitude) + '" required></label>' +
-      '<button type="button" class="btn btn-outline btn-block" id="lok-pakai">📍 Pakai Lokasi Saya</button>' +
+      '<button type="button" class="btn btn-outline btn-block" id="lok-pakai">' + ikonSvg('lokasi') + ' Pakai Lokasi Saya</button>' +
       '<label class="field mt"><span>Radius (meter)</span><input type="number" id="lok-radius" min="10" max="10000" value="' + esc(baru ? '100' : l.radius_m) + '" required></label>' +
       '<p class="form-error" id="lok-error" hidden></p>' +
       '<button type="submit" class="btn btn-primary btn-block" id="btn-lok-simpan">' + (baru ? 'Tambah Lokasi' : 'Simpan Perubahan') + '</button>' +
@@ -1871,7 +1920,7 @@ function gambarPengaturan(el, s, libur) {
       '<div id="libur-daftar" class="mt">' +
       (libur.length
         ? libur.map(function (r) {
-            return '<div class="kv"><span>📅 ' + esc(tampilTanggal(r.tanggal)) + ' — ' + esc(r.keterangan) + '</span>' +
+            return '<div class="kv"><span>' + ikonSvg('kalender') + ' ' + esc(tampilTanggal(r.tanggal)) + ' — ' + esc(r.keterangan) + '</span>' +
               '<button type="button" class="btn btn-danger btn-sm" data-libur-hapus="' + esc(r.tanggal) + '">Hapus</button></div>';
           }).join('')
         : '<p class="small muted">Belum ada hari libur.</p>') +
@@ -1935,7 +1984,7 @@ SCREENS.rekap = {
       '<div class="filter-bar">' +
         '<label class="field full"><span>Bulan</span><input type="month" id="rek-bulan" value="' + bulanIni() + '"></label>' +
         '<button type="button" class="btn btn-primary" id="btn-rek-tampil">Tampilkan</button>' +
-        '<button type="button" class="btn btn-outline" id="btn-rek-csv" disabled>⬇ Ekspor CSV</button>' +
+        '<button type="button" class="btn btn-outline" id="btn-rek-csv" disabled>' + ikonSvg('unduh') + ' Ekspor CSV</button>' +
       '</div>' +
       '<div id="rek-hasil">' + loadingHTML('Memuat rekap…') + '</div>';
     $('btn-rek-tampil').addEventListener('click', muatRekap);
@@ -1956,7 +2005,7 @@ function muatRekap() {
       rekapTerakhir = data;
       var daftar = data.daftar || [];
       if (!daftar.length) {
-        kotak.innerHTML = emptyHTML('📑', 'Belum ada data karyawan untuk rekap.');
+        kotak.innerHTML = emptyHTML(ikonSvg('rekap'), 'Belum ada data karyawan untuk rekap.');
         return;
       }
       kotak.innerHTML =
@@ -2038,7 +2087,7 @@ function muatLog() {
     .then(function (data) {
       var daftar = data.daftar || [];
       if (!daftar.length) {
-        kotak.innerHTML = emptyHTML('📜', 'Tidak ada aktivitas pada rentang tanggal ini.');
+        kotak.innerHTML = emptyHTML(ikonSvg('log'), 'Tidak ada aktivitas pada rentang tanggal ini.');
         return;
       }
       kotak.innerHTML = daftar.map(function (r) {
