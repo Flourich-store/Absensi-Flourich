@@ -218,14 +218,22 @@ button, input, select, textarea { font: inherit; color: inherit; }
   white-space: nowrap;
 }
 .tab .tab-ico {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 44px;
-  line-height: 36px;
-  margin: 0 auto 1px;
-  border-radius: 12px;
-  font-size: 19px;
+  height: 34px;
+  margin: 0 auto 2px;
+  border-radius: 11px;
   transition: background .15s ease;
 }
+.tab .tab-ico svg {
+  width: 21px;
+  height: 21px;
+  display: block;
+  transition: transform .15s ease;
+}
+.tab:active .tab-ico svg { transform: scale(.9); }
 .tab.is-active { color: var(--biru); font-weight: 700; }
 .tab.is-active .tab-ico { background: var(--biru-muda); }
 

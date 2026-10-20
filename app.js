@@ -276,26 +276,91 @@ function kirimLogin(ev) {
 /* Kerangka aplikasi + tab bawah                                    */
 /* ================================================================ */
 
+/*
+ * Ikon tab = SVG garis (bukan emoji). Emoji dirender font sistem sehingga
+ * bentuk & warnanya berbeda-beda per perangkat dan tidak bisa ikut warna
+ * tema. SVG di bawah memakai `currentColor`, jadi otomatis jadi indigo saat
+ * tab aktif, dan tetap tajam di layar berapa pun DPI-nya.
+ */
+var IKON = {
+  beranda:
+    '<path d="M3 9.6 12 3l9 6.6V20a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>' +
+    '<path d="M9.5 22v-7.5h5V22"/>',
+  dashboard:
+    '<line x1="6" y1="20" x2="6" y2="13"/>' +
+    '<line x1="12" y1="20" x2="12" y2="5"/>' +
+    '<line x1="18" y1="20" x2="18" y2="9.5"/>',
+  absensi:
+    '<rect x="3" y="5" width="18" height="17" rx="2.5"/>' +
+    '<line x1="8" y1="3" x2="8" y2="7"/>' +
+    '<line x1="16" y1="3" x2="16" y2="7"/>' +
+    '<line x1="3" y1="10" x2="21" y2="10"/>' +
+    '<polyline points="8.6 15 10.8 17.2 15.4 12.6"/>',
+  persetujuan:
+    '<polyline points="8.5 11.8 11.2 14.5 21.5 4.2"/>' +
+    '<path d="M20.5 12.5V19a2.5 2.5 0 0 1-2.5 2.5H5A2.5 2.5 0 0 1 2.5 19V5.5A2.5 2.5 0 0 1 5 3h10.5"/>',
+  karyawan:
+    '<path d="M15.5 21v-1.8a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4V21"/>' +
+    '<circle cx="8.75" cy="7.4" r="3.9"/>' +
+    '<path d="M22 21v-1.8a4 4 0 0 0-3-3.85"/>' +
+    '<path d="M15.4 3.7a3.9 3.9 0 0 1 0 7.4"/>',
+  lokasi:
+    '<path d="M20.5 10.2c0 6.3-8.5 11.8-8.5 11.8S3.5 16.5 3.5 10.2a8.5 8.5 0 0 1 17 0Z"/>' +
+    '<circle cx="12" cy="10" r="3"/>',
+  izin:
+    '<path d="M14 2.6H6.6A2.1 2.1 0 0 0 4.5 4.7v14.6a2.1 2.1 0 0 0 2.1 2.1h10.8a2.1 2.1 0 0 0 2.1-2.1V8.1Z"/>' +
+    '<polyline points="13.8 2.6 13.8 8.3 19.5 8.3"/>' +
+    '<line x1="8.5" y1="13" x2="15.5" y2="13"/>' +
+    '<line x1="8.5" y1="16.8" x2="13.5" y2="16.8"/>',
+  riwayat:
+    '<circle cx="12" cy="12" r="9"/>' +
+    '<polyline points="12 6.6 12 12.4 16.2 14.6"/>',
+  // gigi bawaan selebar hampir seluruh kotak; dikecilkan sedikit agar bobot
+  // optisnya setara ikon lain
+  pengaturan:
+    '<g transform="translate(12 12) scale(.93) translate(-12 -12)">' +
+    '<circle cx="12" cy="12" r="3.1"/>' +
+    '<path d="M19.2 14.6a1.6 1.6 0 0 0 .32 1.77l.06.06a1.94 1.94 0 1 1-2.74 2.74l-.06-.06a1.6 1.6 0 0 0-1.77-.32 1.6 1.6 0 0 0-.97 1.47V21a1.94 1.94 0 1 1-3.88 0v-.1a1.6 1.6 0 0 0-1.03-1.46 1.6 1.6 0 0 0-1.77.32l-.06.06a1.94 1.94 0 1 1-2.74-2.74l.06-.06a1.6 1.6 0 0 0 .32-1.77 1.6 1.6 0 0 0-1.47-.97H3a1.94 1.94 0 1 1 0-3.88h.1a1.6 1.6 0 0 0 1.46-1.03 1.6 1.6 0 0 0-.32-1.77l-.06-.06a1.94 1.94 0 1 1 2.74-2.74l.06.06a1.6 1.6 0 0 0 1.77.32H9a1.6 1.6 0 0 0 .97-1.47V3a1.94 1.94 0 1 1 3.88 0v.1a1.6 1.6 0 0 0 .97 1.46 1.6 1.6 0 0 0 1.77-.32l.06-.06a1.94 1.94 0 1 1 2.74 2.74l-.06.06a1.6 1.6 0 0 0-.32 1.77V9a1.6 1.6 0 0 0 1.47.97H21a1.94 1.94 0 1 1 0 3.88h-.1a1.6 1.6 0 0 0-1.46.97Z"/>' +
+    '</g>',
+  rekap:
+    '<rect x="3" y="4.5" width="18" height="15" rx="2.4"/>' +
+    '<line x1="3" y1="9.6" x2="21" y2="9.6"/>' +
+    '<line x1="9.4" y1="9.6" x2="9.4" y2="19.5"/>' +
+    '<line x1="15.2" y1="9.6" x2="15.2" y2="19.5"/>',
+  log:
+    '<polyline points="21.5 12.5 18 12.5 15.2 20 8.8 4 6 12.5 2.5 12.5"/>',
+  profil:
+    '<path d="M20 21v-1.8a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4V21"/>' +
+    '<circle cx="12" cy="7.3" r="4"/>'
+};
+
+/** Bungkus isi ikon jadi <svg> bergaris yang ikut warna teks (currentColor). */
+function ikonSvg(nama) {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+    'stroke-linecap="round" stroke-linejoin="round" focusable="false">' +
+    (IKON[nama] || IKON.beranda) + '</svg>';
+}
+
 var TAB_KARYAWAN = [
-  { id: 'beranda', label: 'Beranda', ico: '🏠' },
-  { id: 'izin', label: 'Izin', ico: '📝' },
-  { id: 'riwayat', label: 'Riwayat', ico: '🕘' },
-  { id: 'profil', label: 'Profil', ico: '👤' }
+  { id: 'beranda', label: 'Beranda', ico: 'beranda' },
+  { id: 'izin', label: 'Izin', ico: 'izin' },
+  { id: 'riwayat', label: 'Riwayat', ico: 'riwayat' },
+  { id: 'profil', label: 'Profil', ico: 'profil' }
 ];
 
 var TAB_ADMIN = [
-  { id: 'beranda', label: 'Beranda', ico: '🏠' },
-  { id: 'dashboard', label: 'Dashboard', ico: '📊' },
-  { id: 'absensi', label: 'Absensi', ico: '🗓️' },
-  { id: 'persetujuan', label: 'Persetujuan', ico: '✅' },
-  { id: 'karyawan', label: 'Karyawan', ico: '👥' },
-  { id: 'lokasi', label: 'Lokasi', ico: '📍' },
-  { id: 'izin', label: 'Izin', ico: '📝' },
-  { id: 'riwayat', label: 'Riwayat', ico: '🕘' },
-  { id: 'pengaturan', label: 'Pengaturan', ico: '⚙️' },
-  { id: 'rekap', label: 'Rekap', ico: '📑' },
-  { id: 'log', label: 'Log', ico: '📜' },
-  { id: 'profil', label: 'Profil', ico: '👤' }
+  { id: 'beranda', label: 'Beranda', ico: 'beranda' },
+  { id: 'dashboard', label: 'Dashboard', ico: 'dashboard' },
+  { id: 'absensi', label: 'Absensi', ico: 'absensi' },
+  { id: 'persetujuan', label: 'Persetujuan', ico: 'persetujuan' },
+  { id: 'karyawan', label: 'Karyawan', ico: 'karyawan' },
+  { id: 'lokasi', label: 'Lokasi', ico: 'lokasi' },
+  { id: 'izin', label: 'Izin', ico: 'izin' },
+  { id: 'riwayat', label: 'Riwayat', ico: 'riwayat' },
+  { id: 'pengaturan', label: 'Pengaturan', ico: 'pengaturan' },
+  { id: 'rekap', label: 'Rekap', ico: 'rekap' },
+  { id: 'log', label: 'Log', ico: 'log' },
+  { id: 'profil', label: 'Profil', ico: 'profil' }
 ];
 
 function tabSekarang() {
@@ -307,7 +372,7 @@ function gambarTabbar() {
   $('tabbar').innerHTML = tabSekarang().map(function (t) {
     return '<button type="button" class="tab' + (t.id === aktif ? ' is-active' : '') +
       '" data-screen="' + t.id + '" aria-current="' + (t.id === aktif ? 'page' : 'false') + '">' +
-      '<span class="tab-ico" aria-hidden="true">' + t.ico + '</span>' + esc(t.label) + '</button>';
+      '<span class="tab-ico" aria-hidden="true">' + ikonSvg(t.ico) + '</span>' + esc(t.label) + '</button>';
   }).join('');
   Array.prototype.forEach.call($('tabbar').querySelectorAll('.tab'), function (b) {
     b.addEventListener('click', function () { bukaScreen(b.dataset.screen); });
