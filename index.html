@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#1d4ed8">
+  <meta name="theme-color" content="#4f46e5">
   <title>Absensi Karyawan</title>
   <meta name="description" content="Aplikasi absensi mobile dengan validasi lokasi GPS dan selfie, berbasis Google Sheets.">
   <link rel="manifest" href="manifest.json">
@@ -26,23 +26,31 @@
     <div class="spinner" aria-hidden="true"></div>
     <p class="splash-sub">Memuat…</p>
   </div>
-  <noscript><style>#screen-splash{display:none!important}</style></noscript>
+  <noscript><style>#screen-splash{display:none!important}#screen-login{display:flex!important}</style></noscript>
   <script>
-    // Jaring pengaman: bila app.js gagal dimuat, splash tidak menutupi layar selamanya.
+    // Jaring pengaman: bila app.js gagal dimuat, splash tidak menutupi layar
+    // selamanya. Saat sesi tersimpan, layar login TIDAK boleh diperlihatkan —
+    // biarkan splash sampai app.js mengambil alih. Tanpa sesi, login memang
+    // tujuannya sehingga aman dipakai sebagai cadangan.
     setTimeout(function () {
       var s = document.getElementById('screen-splash');
-      if (s) s.hidden = true;
+      if (!s) return;
+      var sesi = false;
+      try { sesi = !!localStorage.getItem('absensi_token'); } catch (e) {}
+      if (sesi) return;
+      var l = document.getElementById('screen-login');
+      if (l) l.hidden = false;
+      s.hidden = true;
     }, 4000);
   </script>
 
   <!-- ============================================================ -->
   <!-- Layar Login                                                   -->
   <!-- ============================================================ -->
-  <div class="screen-login" id="screen-login">
+  <div class="screen-login" id="screen-login" hidden>
     <div class="login-card">
       <div class="login-logo" aria-hidden="true">✓</div>
       <h1 class="login-title">Absensi Karyawan</h1>
-      <p class="login-sub">Masuk dengan username dan PIN Anda.</p>
 
       <form id="form-login" autocomplete="off" novalidate>
         <label class="field">
@@ -62,11 +70,6 @@
 
         <button type="submit" class="btn btn-primary btn-block" id="btn-login">Masuk</button>
       </form>
-
-      <p class="privacy-note">
-        🔒 Dengan masuk, Anda memahami bahwa <strong>lokasi GPS</strong> dan
-        <strong>foto selfie</strong> dikumpulkan aplikasi ini untuk keperluan absensi.
-      </p>
     </div>
   </div>
 

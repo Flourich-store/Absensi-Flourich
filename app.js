@@ -160,6 +160,50 @@ function bulanIni() {
   return d.getFullYear() + '-' + jam2(d.getMonth() + 1);
 }
 
+/* --- Penampilan nilai tanggal/jam dari API ------------------------- */
+/* Sel spreadsheet yang terkonversi Date (basis serial 1899) sampai ke
+ * sini sebagai ISO "1899-12-30T14:26:48.000Z" — tahun/bulannya ngaco.
+ * Fungsi berikut mengembalikannya jadi jam/tanggal lokal yang benar;
+ * teks yang sudah benar dilewatkan apa adanya. */
+function tampilJam(v) {
+  if (v === null || v === undefined || v === '') return '';
+  var s = String(v);
+  if (!/^\d{4}-\d{2}-\d{2}T/.test(s)) return s;
+  var d = new Date(s);
+  if (isNaN(d.getTime())) return s;
+  return jam2(d.getHours()) + ':' + jam2(d.getMinutes()) + ':' + jam2(d.getSeconds());
+}
+function tampilTanggal(v) {
+  if (v === null || v === undefined || v === '') return '';
+  var s = String(v);
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+  if (!m) return s;
+  var d = new Date(s);
+  if (isNaN(d.getTime())) return s.slice(0, 10);
+  return d.getFullYear() + '-' + jam2(d.getMonth() + 1) + '-' + jam2(d.getDate());
+}
+function tampilWaktu(v) {
+  if (v === null || v === undefined || v === '') return '';
+  var s = String(v);
+  if (!/^\d{4}-\d{2}-\d{2}T/.test(s)) return s;
+  var d = new Date(s);
+  if (isNaN(d.getTime())) return s.slice(0, 19).replace('T', ' ');
+  return d.getFullYear() + '-' + jam2(d.getMonth() + 1) + '-' + jam2(d.getDate()) +
+    ' ' + jam2(d.getHours()) + ':' + jam2(d.getMinutes()) + ':' + jam2(d.getSeconds());
+}
+/** Date tengah malam WAKTU LOKAL dari 'yyyy-MM-dd'. new Date('2026-10-20')
+ *  diparse sebagai tengah malam UTC sehingga tanggal bisa meleset satu hari
+ *  pada zona di barat UTC. Nilai tak terbaca -> hari ini. */
+function tanggalLokal(v) {
+  var s = tampilTanggal(v);
+  var p = /^(\d{4})-(\d{2})-(\d{2})$/.test(s) ? s.split('-') : null;
+  if (!p) {
+    var d = new Date(s);
+    return isNaN(d.getTime()) ? new Date() : d;
+  }
+  return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+}
+
 function mulaiJam(el) {
   if (jamTimer) clearInterval(jamTimer);
   var kotak = document.getElementById('jam-jalan');
@@ -328,11 +372,11 @@ function berandaHTML(h, user) {
   var tombol = '';
   if (h.jenis_absen_berikut === 'masuk') {
     tombol = '<button type="button" class="btn btn-primary btn-big" id="btn-absen-masuk">' +
-      'Absen Masuk<span class="btn-sub">Batas toleransi ' + esc(h.jam_masuk) + ' + ' +
+      'Absen Masuk<span class="btn-sub">Batas toleransi ' + esc(tampilJam(h.jam_masuk)) + ' + ' +
       esc(h.toleransi_menit) + ' menit</span></button>';
   } else if (h.jenis_absen_berikut === 'pulang') {
     tombol = '<button type="button" class="btn btn-success btn-big" id="btn-absen-pulang">' +
-      'Absen Pulang<span class="btn-sub">Jam pulang ' + esc(h.jam_pulang) + '</span></button>';
+      'Absen Pulang<span class="btn-sub">Jam pulang ' + esc(tampilJam(h.jam_pulang)) + '</span></button>';
   } else {
     var alasanTombol = h.status === 'sudah_pulang' ? 'Absen hari ini sudah selesai'
       : (h.status === 'libur' ? 'Tidak ada absen pada hari ini'
@@ -351,17 +395,17 @@ function berandaHTML(h, user) {
   }
   if (h.status === 'izin' && h.izin) {
     banner += '<div class="banner info">📗 Izin ' + esc(h.izin.jenis) + ' disetujui (' +
-      esc(h.izin.tanggal_mulai) + ' s/d ' + esc(h.izin.tanggal_selesai) + ').</div>';
+      esc(tampilTanggal(h.izin.tanggal_mulai)) + ' s/d ' + esc(tampilTanggal(h.izin.tanggal_selesai)) + ').</div>';
   }
 
   var detailAbsen = '';
   if (h.absensi) {
     detailAbsen =
       '<div class="card"><p class="card-title">Absensi hari ini</p>' +
-      '<div class="kv"><span>Jam masuk</span><b>' + esc(h.absensi.jam_masuk || '-') + '</b></div>' +
+      '<div class="kv"><span>Jam masuk</span><b>' + esc(tampilJam(h.absensi.jam_masuk) || '-') + '</b></div>' +
       '<div class="kv"><span>Status</span><b>' + esc(h.absensi.status || '-') + '</b></div>' +
       (h.absensi.alasan_terlambat ? '<div class="kv"><span>Alasan terlambat</span><b>' + esc(h.absensi.alasan_terlambat) + '</b></div>' : '') +
-      '<div class="kv"><span>Jam pulang</span><b>' + esc(h.absensi.jam_pulang || 'Belum Absen Pulang') + '</b></div>' +
+      '<div class="kv"><span>Jam pulang</span><b>' + esc(tampilJam(h.absensi.jam_pulang) || 'Belum Absen Pulang') + '</b></div>' +
       '</div>';
   }
 
@@ -379,7 +423,7 @@ function berandaHTML(h, user) {
     '</div>' +
     tombol +
     '<div class="card mt"><p class="card-title">Hari ini</p>' + lokasiInfo +
-      '<div class="kv"><span>Jam kerja</span><b>' + esc(h.jam_masuk) + ' – ' + esc(h.jam_pulang) + '</b></div>' +
+      '<div class="kv"><span>Jam kerja</span><b>' + esc(tampilJam(h.jam_masuk)) + ' – ' + esc(tampilJam(h.jam_pulang)) + '</b></div>' +
       '<div class="kv"><span>Akurasi GPS maksimal</span><b>' + esc(h.akurasi_maks_m) + ' m</b></div>' +
     '</div>' +
     detailAbsen;
@@ -607,9 +651,8 @@ function renderLangkahKamera(body, foot) {
     '<p class="langkah-label">Langkah 2 — Ambil selfie</p>' +
     '<div id="kamera-area"><div class="loading-state"><div class="spinner"></div>' +
     '<p>Membuka kamera depan…</p></div></div>' +
-    '<p class="info-foto">Kamera depan otomatis. Hasil foto dikompres di perangkat ' +
-    '(sisi terpanjang ' + UKURAN_SISI_FOTO + ' px, kualitas ' + KUALITAS_FOTO + '). ' +
-    'Tidak ada pilihan galeri — foto harus diambil sekarang.</p>';
+    '<p class="info-foto">Kamera depan otomatis — tidak ada pilihan galeri, ' +
+    'foto harus diambil sekarang.</p>';
   foot.hidden = false;
   foot.innerHTML =
     '<div class="btn-row">' +
@@ -782,7 +825,7 @@ function renderLangkahKonfirmasi(body, foot) {
       (a.alasan ? '<div class="kv"><span>Alasan terlambat</span><b>' + esc(a.alasan) + '</b></div>' : '') +
     '</div>' +
     '<div id="kirim-pesan"></div>' +
-    '<p class="small muted center">Periksa data di atas. Setelah dikirim, baris absensi beserta link foto tersimpan di spreadsheet.</p>';
+    '<p class="small muted center">Periksa data sebelum dikirim.</p>';
   foot.hidden = false;
   foot.innerHTML =
     '<div class="btn-row">' +
@@ -842,10 +885,10 @@ function renderLangkahHasil(body, foot) {
       '</div>' +
       '<div class="card">' +
         (a.jenis === 'masuk'
-          ? '<div class="kv"><span>Jam masuk</span><b>' + esc(d.jam_masuk || '') + '</b></div>' +
+          ? '<div class="kv"><span>Jam masuk</span><b>' + esc(tampilJam(d.jam_masuk) || '') + '</b></div>' +
             '<div class="kv"><span>Status</span><b>' + esc(d.status || '') + '</b></div>' +
             (d.alasan_terlambat ? '<div class="kv"><span>Alasan</span><b>' + esc(d.alasan_terlambat) + '</b></div>' : '')
-          : '<div class="kv"><span>Jam pulang</span><b>' + esc(d.jam_pulang || '') + '</b></div>') +
+          : '<div class="kv"><span>Jam pulang</span><b>' + esc(tampilJam(d.jam_pulang) || '') + '</b></div>') +
         '<div class="kv"><span>Jarak tercatat</span><b>' + esc(d.jarak_m) + ' m</b></div>' +
         '<div class="kv"><span>Foto</span><b>Tersimpan di Drive ✓</b></div>' +
       '</div>';
@@ -969,7 +1012,7 @@ function muatDaftarIzin() {
       kotak.innerHTML = daftar.map(function (r) {
         return '<div class="row-item">' +
           '<div class="row-head"><span class="row-name">' + esc(r.jenis) + '</span>' + badgeIzin(r.status) + '</div>' +
-          '<div class="row-meta">📅 ' + esc(r.tanggal_mulai) + ' s/d ' + esc(r.tanggal_selesai) + '</div>' +
+          '<div class="row-meta">📅 ' + esc(tampilTanggal(r.tanggal_mulai)) + ' s/d ' + esc(tampilTanggal(r.tanggal_selesai)) + '</div>' +
           '<div class="row-meta">' + esc(r.alasan) + '</div>' +
           (r.status === 'Menunggu' ?
             '<div class="btn-row"><button type="button" class="btn btn-outline btn-sm" data-batal="' + esc(r.id_izin) + '">Batalkan</button></div>' : '') +
@@ -1033,10 +1076,10 @@ function muatRiwayat() {
         html += absen.map(function (r) {
           var st = r.status === 'Terlambat' ? 'terlambat' : 'hadir';
           return '<div class="row-item">' +
-            '<div class="row-head"><span class="row-name">' + esc(r.tanggal) + '</span>' +
+            '<div class="row-head"><span class="row-name">' + esc(tampilTanggal(r.tanggal)) + '</span>' +
             '<span class="badge ' + st + '">' + esc(r.status) + '</span></div>' +
-            '<div class="row-meta">Masuk ' + esc(r.jam_masuk || '—') +
-            ' · Pulang ' + esc(r.jam_pulang || 'Belum Absen Pulang') + '</div>' +
+            '<div class="row-meta">Masuk ' + esc(tampilJam(r.jam_masuk) || '—') +
+            ' · Pulang ' + esc(tampilJam(r.jam_pulang) || 'Belum Absen Pulang') + '</div>' +
             (r.alasan_terlambat ? '<div class="row-meta">Alasan: ' + esc(r.alasan_terlambat) + '</div>' : '') +
             (r.dikoreksi ? '<div class="row-meta">✏️ Dikoreksi admin</div>' : '') +
           '</div>';
@@ -1050,7 +1093,7 @@ function muatRiwayat() {
         html += izin.map(function (r) {
           return '<div class="row-item">' +
             '<div class="row-head"><span class="row-name">' + esc(r.jenis) + '</span>' + badgeIzin(r.status) + '</div>' +
-            '<div class="row-meta">📅 ' + esc(r.tanggal_mulai) + ' s/d ' + esc(r.tanggal_selesai) + ' — ' + esc(r.alasan) + '</div>' +
+            '<div class="row-meta">📅 ' + esc(tampilTanggal(r.tanggal_mulai)) + ' s/d ' + esc(tampilTanggal(r.tanggal_selesai)) + ' — ' + esc(r.alasan) + '</div>' +
           '</div>';
         }).join('');
       }
@@ -1093,8 +1136,7 @@ SCREENS.profil = {
         '<button type="submit" class="btn btn-primary btn-block" id="btn-ganti-pin">Simpan PIN Baru</button>' +
       '</form></div>' +
       '<div class="card"><p class="card-title">Sesi</p>' +
-      '<button type="button" class="btn btn-danger btn-block" id="btn-keluar">Keluar</button>' +
-      '<p class="small muted mt">Keluar menghapus token sesi dari perangkat ini.</p></div>';
+      '<button type="button" class="btn btn-danger btn-block" id="btn-keluar">Keluar</button></div>';
 
     $('form-ganti-pin').addEventListener('submit', kirimGantiPin);
     $('btn-keluar').addEventListener('click', function () {
@@ -1167,7 +1209,7 @@ SCREENS.dashboard = {
       .then(function (d) {
         var j = d.jumlah;
         var html =
-          '<div class="banner info">' + esc(tglIndonesia(new Date(d.tanggal))) + ' · pukul ' + esc(d.jam_sekarang) +
+          '<div class="banner info">' + esc(tglIndonesia(tanggalLokal(d.tanggal))) + ' · pukul ' + esc(d.jam_sekarang) +
           (d.hari_libur ? ' · 🕶 libur: ' + esc(d.hari_libur.keterangan || 'Hari libur') : (d.hari_kerja ? '' : ' · bukan hari kerja')) + '</div>' +
           '<div class="stat-grid">' +
             '<div class="stat hadir"><b>' + j.hadir + '</b><span>Hadir</span></div>' +
@@ -1184,8 +1226,8 @@ SCREENS.dashboard = {
             d.karyawan.map(function (k) {
               return '<tr><td>' + esc(k.nama) + '<br><span class="small muted">' + esc(k.jabatan || k.id_karyawan) + '</span></td>' +
                 '<td>' + badgeStatusAbsen(k.status) + '</td>' +
-                '<td>' + esc(k.jam_masuk || '—') + '</td>' +
-                '<td>' + esc(k.jam_pulang || '—') + '</td>' +
+                '<td>' + esc(tampilJam(k.jam_masuk) || '—') + '</td>' +
+                '<td>' + esc(tampilJam(k.jam_pulang) || '—') + '</td>' +
                 '<td class="wrap small">' + esc(k.keterangan || '') + '</td>' +
               '</tr>';
             }).join('') + '</tbody></table></div>';
@@ -1272,9 +1314,9 @@ function renderAbsensi(kotak) {
     if (r.link_foto_pulang) foto += '<a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="' + esc(r.link_foto_pulang) + '">📷 Foto Pulang</a>';
     if (!foto) foto = '<span class="small muted">—</span>';
     return '<div class="row-item">' +
-      '<div class="row-head"><span class="row-name">' + esc(r.tanggal) + ' · ' + esc(r.nama) + '</span>' + badgeStatusAbsen(r.status) + '</div>' +
-      '<div class="row-meta">Masuk ' + esc(r.jam_masuk || '—') +
-      ' · Pulang ' + esc(r.jam_pulang || 'Belum Absen Pulang') +
+      '<div class="row-head"><span class="row-name">' + esc(tampilTanggal(r.tanggal)) + ' · ' + esc(r.nama) + '</span>' + badgeStatusAbsen(r.status) + '</div>' +
+      '<div class="row-meta">Masuk ' + esc(tampilJam(r.jam_masuk) || '—') +
+      ' · Pulang ' + esc(tampilJam(r.jam_pulang) || 'Belum Absen Pulang') +
       (r.jarak_masuk_m !== null ? ' · jarak ' + r.jarak_masuk_m + ' m' : '') + '</div>' +
       (r.alasan_terlambat ? '<div class="row-meta">Alasan terlambat: ' + esc(r.alasan_terlambat) + '</div>' : '') +
       (r.dikoreksi ? '<div class="row-meta">✏️ Dikoreksi — ' + esc(r.catatan_koreksi) + '</div>' : '') +
@@ -1295,10 +1337,10 @@ function renderAbsensi(kotak) {
 
 function bukaKoreksi(r) {
   var html =
-    '<p class="small muted">' + esc(r.tanggal) + ' · ' + esc(r.nama) + ' (' + esc(r.id_karyawan) + ')</p>' +
+    '<p class="small muted">' + esc(tampilTanggal(r.tanggal)) + ' · ' + esc(r.nama) + ' (' + esc(r.id_karyawan) + ')</p>' +
     '<form id="form-koreksi" novalidate>' +
-      '<label class="field"><span>Jam masuk (HH:mm)</span><input type="text" id="kor-masuk" value="' + esc(r.jam_masuk || '') + '" inputmode="numeric" required></label>' +
-      '<label class="field"><span>Jam pulang (HH:mm, kosongkan bila belum pulang)</span><input type="text" id="kor-pulang" value="' + esc(r.jam_pulang || '') + '" inputmode="numeric"></label>' +
+      '<label class="field"><span>Jam masuk (HH:mm)</span><input type="text" id="kor-masuk" value="' + esc(tampilJam(r.jam_masuk) || '') + '" inputmode="numeric" required></label>' +
+      '<label class="field"><span>Jam pulang (HH:mm, kosongkan bila belum pulang)</span><input type="text" id="kor-pulang" value="' + esc(tampilJam(r.jam_pulang) || '') + '" inputmode="numeric"></label>' +
       '<label class="field"><span>Status</span><select id="kor-status">' +
         '<option value="Hadir"' + (r.status === 'Hadir' ? ' selected' : '') + '>Hadir</option>' +
         '<option value="Terlambat"' + (r.status === 'Terlambat' ? ' selected' : '') + '>Terlambat</option>' +
@@ -1381,7 +1423,7 @@ function muatPersetujuan() {
       kotak.innerHTML = daftar.map(function (r) {
         return '<div class="row-item">' +
           '<div class="row-head"><span class="row-name">' + esc(r.nama) + ' · ' + esc(r.jenis) + '</span>' + badgeIzin(r.status) + '</div>' +
-          '<div class="row-meta">📅 ' + esc(r.tanggal_mulai) + ' s/d ' + esc(r.tanggal_selesai) + '</div>' +
+          '<div class="row-meta">📅 ' + esc(tampilTanggal(r.tanggal_mulai)) + ' s/d ' + esc(tampilTanggal(r.tanggal_selesai)) + '</div>' +
           '<div class="row-meta">' + esc(r.alasan) + '</div>' +
           (r.catatan_admin ? '<div class="row-meta">Catatan: ' + esc(r.catatan_admin) + '</div>' : '') +
           (r.status === 'Menunggu' ?
@@ -1752,7 +1794,7 @@ function gambarPengaturan(el, s, libur) {
       '</fieldset>' +
       '<p class="form-error" id="set-error" hidden></p>' +
       '<button type="submit" class="btn btn-primary btn-block" id="btn-set-simpan">Simpan Pengaturan</button>' +
-      '<p class="small muted mt">Perubahan hanya berlaku untuk absensi berikutnya; data lama tidak berubah (bagian 12 PRD).</p>' +
+      '<p class="small muted mt">Perubahan hanya berlaku untuk absensi berikutnya; data lama tidak berubah.</p>' +
     '</form></div>' +
     '<div class="card"><p class="card-title">Daftar Hari Libur</p>' +
       '<form id="form-libur" novalidate style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
@@ -1764,7 +1806,7 @@ function gambarPengaturan(el, s, libur) {
       '<div id="libur-daftar" class="mt">' +
       (libur.length
         ? libur.map(function (r) {
-            return '<div class="kv"><span>📅 ' + esc(r.tanggal) + ' — ' + esc(r.keterangan) + '</span>' +
+            return '<div class="kv"><span>📅 ' + esc(tampilTanggal(r.tanggal)) + ' — ' + esc(r.keterangan) + '</span>' +
               '<button type="button" class="btn btn-danger btn-sm" data-libur-hapus="' + esc(r.tanggal) + '">Hapus</button></div>';
           }).join('')
         : '<p class="small muted">Belum ada hari libur.</p>') +
@@ -1936,7 +1978,7 @@ function muatLog() {
       }
       kotak.innerHTML = daftar.map(function (r) {
         return '<div class="row-item">' +
-          '<div class="row-head"><span class="row-name small">' + esc(r.waktu) + '</span>' +
+          '<div class="row-head"><span class="row-name small">' + esc(tampilWaktu(r.waktu)) + '</span>' +
           '<span class="badge">' + esc(r.aksi) + '</span></div>' +
           '<div class="row-meta">' + esc(r.nama) + ' (' + esc(r.id_pengguna) + ')</div>' +
           '<div class="row-meta">' + esc(r.detail) + '</div>' +

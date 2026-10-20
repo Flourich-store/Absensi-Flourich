@@ -5,7 +5,7 @@
  * "mode offline" di luar cakupan (bagian 5 PRD).
  */
 
-var CACHE = 'absensi-shell-v3'; // Tahap 3: styles.css + app.js berubah
+var CACHE = 'absensi-shell-v5'; // Tahap 5: revisi UI elegan + refresh tanpa kilat layar login
 var SHELL = [
   './',
   './index.html',
