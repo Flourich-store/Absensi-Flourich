@@ -277,117 +277,16 @@ function kirimLogin(ev) {
 /* ================================================================ */
 
 /*
- * Ikon tab = SVG garis (bukan emoji). Emoji dirender font sistem sehingga
- * bentuk & warnanya berbeda-beda per perangkat dan tidak bisa ikut warna
- * tema. SVG di bawah memakai `currentColor`, jadi otomatis jadi indigo saat
- * tab aktif, dan tetap tajam di layar berapa pun DPI-nya.
- */
-var IKON = {
-  beranda:
-    '<path d="M3 9.6 12 3l9 6.6V20a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>' +
-    '<path d="M9.5 22v-7.5h5V22"/>',
-  dashboard:
-    '<line x1="6" y1="20" x2="6" y2="13"/>' +
-    '<line x1="12" y1="20" x2="12" y2="5"/>' +
-    '<line x1="18" y1="20" x2="18" y2="9.5"/>',
-  absensi:
-    '<rect x="3" y="5" width="18" height="17" rx="2.5"/>' +
-    '<line x1="8" y1="3" x2="8" y2="7"/>' +
-    '<line x1="16" y1="3" x2="16" y2="7"/>' +
-    '<line x1="3" y1="10" x2="21" y2="10"/>' +
-    '<polyline points="8.6 15 10.8 17.2 15.4 12.6"/>',
-  persetujuan:
-    '<polyline points="8.5 11.8 11.2 14.5 21.5 4.2"/>' +
-    '<path d="M20.5 12.5V19a2.5 2.5 0 0 1-2.5 2.5H5A2.5 2.5 0 0 1 2.5 19V5.5A2.5 2.5 0 0 1 5 3h10.5"/>',
-  karyawan:
-    '<path d="M15.5 21v-1.8a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4V21"/>' +
-    '<circle cx="8.75" cy="7.4" r="3.9"/>' +
-    '<path d="M22 21v-1.8a4 4 0 0 0-3-3.85"/>' +
-    '<path d="M15.4 3.7a3.9 3.9 0 0 1 0 7.4"/>',
-  lokasi:
-    '<path d="M20.5 10.2c0 6.3-8.5 11.8-8.5 11.8S3.5 16.5 3.5 10.2a8.5 8.5 0 0 1 17 0Z"/>' +
-    '<circle cx="12" cy="10" r="3"/>',
-  izin:
-    '<path d="M14 2.6H6.6A2.1 2.1 0 0 0 4.5 4.7v14.6a2.1 2.1 0 0 0 2.1 2.1h10.8a2.1 2.1 0 0 0 2.1-2.1V8.1Z"/>' +
-    '<polyline points="13.8 2.6 13.8 8.3 19.5 8.3"/>' +
-    '<line x1="8.5" y1="13" x2="15.5" y2="13"/>' +
-    '<line x1="8.5" y1="16.8" x2="13.5" y2="16.8"/>',
-  riwayat:
-    '<circle cx="12" cy="12" r="9"/>' +
-    '<polyline points="12 6.6 12 12.4 16.2 14.6"/>',
-  // gigi bawaan selebar hampir seluruh kotak; dikecilkan sedikit agar bobot
-  // optisnya setara ikon lain
-  pengaturan:
-    '<g transform="translate(12 12) scale(.93) translate(-12 -12)">' +
-    '<circle cx="12" cy="12" r="3.1"/>' +
-    '<path d="M19.2 14.6a1.6 1.6 0 0 0 .32 1.77l.06.06a1.94 1.94 0 1 1-2.74 2.74l-.06-.06a1.6 1.6 0 0 0-1.77-.32 1.6 1.6 0 0 0-.97 1.47V21a1.94 1.94 0 1 1-3.88 0v-.1a1.6 1.6 0 0 0-1.03-1.46 1.6 1.6 0 0 0-1.77.32l-.06.06a1.94 1.94 0 1 1-2.74-2.74l.06-.06a1.6 1.6 0 0 0 .32-1.77 1.6 1.6 0 0 0-1.47-.97H3a1.94 1.94 0 1 1 0-3.88h.1a1.6 1.6 0 0 0 1.46-1.03 1.6 1.6 0 0 0-.32-1.77l-.06-.06a1.94 1.94 0 1 1 2.74-2.74l.06.06a1.6 1.6 0 0 0 1.77.32H9a1.6 1.6 0 0 0 .97-1.47V3a1.94 1.94 0 1 1 3.88 0v.1a1.6 1.6 0 0 0 .97 1.46 1.6 1.6 0 0 0 1.77-.32l.06-.06a1.94 1.94 0 1 1 2.74 2.74l-.06.06a1.6 1.6 0 0 0-.32 1.77V9a1.6 1.6 0 0 0 1.47.97H21a1.94 1.94 0 1 1 0 3.88h-.1a1.6 1.6 0 0 0-1.46.97Z"/>' +
-    '</g>',
-  rekap:
-    '<rect x="3" y="4.5" width="18" height="15" rx="2.4"/>' +
-    '<line x1="3" y1="9.6" x2="21" y2="9.6"/>' +
-    '<line x1="9.4" y1="9.6" x2="9.4" y2="19.5"/>' +
-    '<line x1="15.2" y1="9.6" x2="15.2" y2="19.5"/>',
-  log:
-    '<polyline points="21.5 12.5 18 12.5 15.2 20 8.8 4 6 12.5 2.5 12.5"/>',
-  profil:
-    '<path d="M20 21v-1.8a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4V21"/>' +
-    '<circle cx="12" cy="7.3" r="4"/>',
-
-  /* --- ikon di dalam konten (banner, status, baris, tombol) --- */
-  peringatan:
-    '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>' +
-    '<line x1="12" y1="9.4" x2="12" y2="13.6"/>' +
-    '<line x1="12" y1="17" x2="12" y2="17.1"/>',
-  kunci:
-    '<rect x="4.5" y="10.4" width="15" height="10.6" rx="2.6"/>' +
-    '<path d="M8.2 10.4V7.2a3.8 3.8 0 0 1 7.6 0v3.2"/>' +
-    '<line x1="12" y1="14.8" x2="12" y2="16.8"/>',
-  kalender:
-    '<rect x="3" y="5" width="18" height="16.6" rx="2.6"/>' +
-    '<line x1="8" y1="3" x2="8" y2="7.4"/>' +
-    '<line x1="16" y1="3" x2="16" y2="7.4"/>' +
-    '<line x1="3" y1="10.4" x2="21" y2="10.4"/>',
-  libur:
-    '<rect x="3" y="5" width="18" height="16.6" rx="2.6"/>' +
-    '<line x1="8" y1="3" x2="8" y2="7.4"/>' +
-    '<line x1="16" y1="3" x2="16" y2="7.4"/>' +
-    '<line x1="3" y1="10.4" x2="21" y2="10.4"/>' +
-    '<line x1="9.2" y1="15.8" x2="14.8" y2="15.8"/>',
-  'centang-lingkar':
-    '<circle cx="12" cy="12" r="9"/>' +
-    '<polyline points="8.2 12.3 11 15.1 16 10.1"/>',
-  'silang-lingkar':
-    '<circle cx="12" cy="12" r="9"/>' +
-    '<line x1="9.3" y1="9.3" x2="14.7" y2="14.7"/>' +
-    '<line x1="14.7" y1="9.3" x2="9.3" y2="14.7"/>',
-  'kotak-kosong':
-    '<polyline points="21.6 12.6 16 12.6 14 16.3 10 16.3 8 12.6 2.4 12.6"/>' +
-    '<path d="M5.9 4.9 2.4 12.6v5.6a2 2 0 0 0 2 2h15.2a2 2 0 0 0 2-2v-5.6l-3.5-7.7a2 2 0 0 0-1.8-1.2H7.7a2 2 0 0 0-1.8 1.2Z"/>',
-  pensil:
-    '<path d="M12 20.5h9"/>' +
-    '<path d="M16.6 3.4a2.1 2.1 0 0 1 3 3L7.6 18.4l-4.1 1.1 1.1-4.1Z"/>',
-  kamera:
-    '<path d="M22 18.4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8.8a2 2 0 0 1 2-2h3.3l1.6-2.4a2 2 0 0 1 1.7-.9h2.8a2 2 0 0 1 1.7.9l1.6 2.4H20a2 2 0 0 1 2 2Z"/>' +
-    '<circle cx="12" cy="13.4" r="3.6"/>',
-  bumi:
-    '<circle cx="12" cy="12" r="9"/>' +
-    '<line x1="3" y1="12" x2="21" y2="12"/>' +
-    '<path d="M12 3a13.5 13.5 0 0 1 0 18 13.5 13.5 0 0 1 0-18Z"/>',
-  unduh:
-    '<path d="M21 15.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3.6"/>' +
-    '<polyline points="7.6 10.4 12 14.8 16.4 10.4"/>' +
-    '<line x1="12" y1="3" x2="12" y2="14.8"/>'
-};
-
-/**
- * Bungkus isi ikon jadi <svg> bergaris yang ikut warna teks (currentColor).
- * Kelas `ico` mengatur ukuran ikon di dalam teks; pada tabbar ukuran diatur
- * `.tab .tab-ico svg` yang lebih spesifik.
+ * Ikon = sprite SVG di index.html (`<symbol id="i-nama">`), dipakai lewat
+ * <use href="#i-nama">. Path ikon hanya tersimpan di satu tempat, dimuat
+ * sekali bersama HTML, dan app.js cukup menulis satu node <use> per ikon.
+ * Bentuk & warnanya diatur aturan .ico di styles.css (currentColor), jadi ikon
+ * otomatis mengikuti warna teks/banner/pil. Nama ikon harus ada di sprite —
+ * diuji oleh tools/uji_ikon.js.
  */
 function ikonSvg(nama, kelas) {
-  return '<svg class="' + (kelas || 'ico') + '" viewBox="0 0 24 24" fill="none" ' +
-    'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" ' +
-    'stroke-linejoin="round" focusable="false">' + (IKON[nama] || IKON.beranda) + '</svg>';
+  return '<svg class="' + (kelas || 'ico') + '" aria-hidden="true" focusable="false">' +
+    '<use href="#i-' + nama + '"></use></svg>';
 }
 
 var TAB_KARYAWAN = [

@@ -235,14 +235,28 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .tab:active .tab-ico svg { transform: scale(.9); }
 
-/* Ikon garis di dalam teks (banner, baris info, pil status, tombol).
-   Ukurannya mengikuti font dan warnanya ikut teks lewat currentColor. */
+/* Sprite ikon: wadah <symbol> yang tidak boleh memakan ruang tata letak. */
+.ikon-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* Ikon garis. Satu aturan ini mengatur bentuk seluruh ikon (garis, ujung
+   bulat) dan warnanya ikut teks lewat currentColor — termasuk isi <use>
+   karena properti ini diwarisi ke dalam shadow tree sprite. */
 .ico {
   width: 1.05em;
   height: 1.05em;
   display: inline-block;
   vertical-align: -.17em;
   flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .btn .ico, .status-pill .ico { margin-right: 2px; vertical-align: -.18em; }
 .row-meta .ico, .kv .ico, .banner .ico { opacity: .9; }
