@@ -477,6 +477,57 @@ table.data td.wrap { white-space: normal; min-width: 160px; }
   overflow: hidden;
 }
 @media (min-width: 560px) { .sheet { border-radius: 24px; } }
+
+@media (min-width: 1024px) { /* Laptop/desktop adjustments */
+  .topbar {
+    padding: 16px 24px calc(16px + env(safe-area-inset-top));
+  }
+  .topbar-title { font-size: 20px; }
+  .content {
+    padding: 24px 28px calc(var(--batang) + 40px + env(safe-area-inset-bottom));
+    max-width: none;
+  }
+  .tabbar {
+    bottom: env(safe-area-inset-bottom);
+  }
+  .tab {
+    min-width: 100px;
+    padding: 10px 14px 9px;
+    font-size: 13px;
+  }
+  .tab .tab-ico {
+    width: 50px;
+    height: 42px;
+  }
+  .tab .tab-ico svg {
+    width: 28px;
+    height: 28px;
+  }
+  .stat-grid { grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); }
+  .stat b { font-size: 30px; }
+  .absen-kartu { padding: 20px; }
+  .absen-foto { width: 120px; height: 120px; }
+  .absen-meta { flex: 1; }
+  .absen-jenis { font-size: 18px; }
+  .absen-baris { font-size: 15px; }
+  .kv { font-size: 16px; padding: 10px 0; }
+  .badge { font-size: 14px; padding: 6px 14px; }
+  .card { padding: 20px; margin-bottom: 16px; }
+  .card-title { font-size: 18px; }
+  .status-hero .jam { font-size: 56px; }
+  .status-hero .tanggal { font-size: 16px; }
+  .status-hero .status-baris { font-size: 18px; }
+  .status-pill { padding: 8px 18px; font-size: 15px; }
+  .banner { padding: 14px 18px; font-size: 15px; }
+  .sheet-foot { padding: 16px 20px; }
+  .modal { max-width: 720px; }
+  .modal-head h2 { font-size: 20px; }
+  .sheet-head h2 { font-size: 20px; }
+  .sheet-head { padding: 20px 60px 12px 20px; }
+  .icon-btn { width: 48px; height: 48px; }
+  .overlay { padding: 40px 32px; }
+}
+
 .sheet-head {
   position: relative;
   padding: 16px 52px 10px 16px;
