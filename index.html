@@ -13,6 +13,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Absensi">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -42,6 +43,7 @@
     <symbol id="i-kamera" viewBox="0 0 24 24"><path d="M22 18.4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8.8a2 2 0 0 1 2-2h3.3l1.6-2.4a2 2 0 0 1 1.7-.9h2.8a2 2 0 0 1 1.7.9l1.6 2.4H20a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13.4" r="3.6"/></symbol>
     <symbol id="i-bumi" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="3" y1="12" x2="21" y2="12"/><path d="M12 3a13.5 13.5 0 0 1 0 18 13.5 13.5 0 0 1 0-18Z"/></symbol>
     <symbol id="i-unduh" viewBox="0 0 24 24"><path d="M21 15.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3.6"/><polyline points="7.6 10.4 12 14.8 16.4 10.4"/><line x1="12" y1="3" x2="12" y2="14.8"/></symbol>
+    <symbol id="i-kirim" viewBox="0 0 24 24"><path d="M21.6 2.4 11 13"/><path d="M21.6 2.4 15 21.6l-4-8.6-8.6-4Z"/></symbol>
   </svg>
 
 
@@ -129,7 +131,6 @@
   <div class="overlay" id="overlay-absen" hidden role="dialog" aria-modal="true" aria-label="Alur absen">
     <div class="sheet">
       <div class="sheet-head">
-        <div class="stepper" id="absen-stepper" aria-hidden="true"></div>
         <h2 id="absen-title">Absen</h2>
         <button type="button" class="icon-btn" id="absen-close" aria-label="Tutup">✕</button>
       </div>
@@ -154,7 +155,10 @@
   <!-- Toast pesan -->
   <div class="toast" id="toast" hidden aria-live="polite"></div>
 
-  <script src="api.js"></script>
-  <script src="app.js"></script>
+  <!-- Leaflet disimpan lokal (bukan CDN) supaya shell PWA tetap utuh saat
+       offline/jaringan buruk; ubin peta tetap butuh jaringan. -->
+  <script defer src="vendor/leaflet/leaflet.js"></script>
+  <script defer src="api.js"></script>
+  <script defer src="app.js"></script>
 </body>
 </html>

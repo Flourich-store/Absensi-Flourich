@@ -1,7 +1,26 @@
 /* styles.css — mobile-first, nyaman satu tangan, lebar 360 px ke atas.
-   Tahap 5: revisi visual — palet indigo/slate, kartu lembut bayangan halus,
-   tombol bergradien, tab aktif pil. Semua nama kelas tetap sama dengan yang
-   dihasilkan app.js. */
+   Tahap 10: tipografi Plus Jakarta Sans (variable, disajikan lokal) dan
+   alur absen satu layar. Nama kelas yang dipakai app.js tetap sama. */
+
+/* Plus Jakarta Sans — variable 400..800, subset latin & latin-ext.
+   Disimpan lokal (bukan Google Fonts) supaya shell PWA utuh saat offline
+   dan tidak ada permintaan pihak ketiga saat aplikasi dibuka. */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('fonts/plus-jakarta-sans-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02AF, U+0304, U+0308, U+0329, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('fonts/plus-jakarta-sans-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
 :root {
   --biru: #4f46e5;
@@ -20,6 +39,7 @@
   --merah-bg: #fee2e2;
   --batang: 60px;
   --bayang: 0 1px 2px rgba(15, 23, 42, .05), 0 10px 26px -18px rgba(15, 23, 42, .35);
+  --font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -30,9 +50,22 @@ html, body {
   height: 100%;
   background: var(--abu-bg);
   color: var(--abu-teks);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  font-size: 16px;
-  line-height: 1.45;
+  font-family: var(--font);
+  font-size: 15.5px;
+  line-height: 1.5;
+  letter-spacing: -.006em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-variant-ligatures: common-ligatures;
+}
+
+/* Judul lebih rapat & tegas; angka waktu memakai lebar tetap agar tidak
+   "bergoyang" saat detik berganti. */
+h1, h2, h3 { letter-spacing: -.022em; }
+.topbar-title, .card-title, .absen-jenis { letter-spacing: -.015em; }
+.jam, .jam-besar, .absen-waktu, .status-hero .jam, .kv b, .absen-baris b {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
 }
 
 [hidden] { display: none !important; }
@@ -471,37 +504,142 @@ table.data td.wrap { white-space: normal; min-width: 160px; }
 .modal-head h2 { margin: 0; font-size: 16.5px; }
 .modal-body { padding: 14px 16px calc(16px + env(safe-area-inset-bottom)); overflow-y: auto; }
 
-/* Stepper alur absen */
-.stepper { display: flex; gap: 5px; }
-.stepper span { height: 5px; flex: 1; border-radius: 99px; background: var(--garis); }
-.stepper span.on { background: linear-gradient(90deg, #6366f1, #4f46e5); }
+/* Peta absen: area absen = lingkaran resmi dari server */
+.peta-bungkus { position: relative; margin: 0 0 12px; }
+.peta {
+  position: relative;
+  z-index: 0;                /* tahan pane Leaflet (z 400+) di bawah sheet */
+  height: 240px;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--garis);
+  background: #e8eef7;
+  box-shadow: var(--bayang);
+}
+.peta .leaflet-container { font: inherit; background: #e8eef7; }
+.peta .leaflet-control-attribution {
+  font-size: 9.5px; color: var(--abu-redup); background: rgba(255, 255, 255, .82);
+}
+.peta .leaflet-control-attribution a { color: var(--biru-tua); }
+.peta-ket { display: flex; align-items: center; gap: 6px; margin: 8px 2px 0; }
+.peta-ket .ico { width: 15px; height: 15px; }
+.peta-marker { background: none; border: 0; }
+.peta-titik {
+  display: block; width: 15px; height: 15px; margin: 3.5px;
+  border-radius: 50%; background: var(--warna);
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, .12), 0 2px 8px rgba(15, 23, 42, .32);
+}
+.peta-titik.kantor {
+  width: 17px; height: 17px; margin: 2.5px;
+  background: #fff; border: 3px solid var(--warna);
+}
+.peta-titik.saya { background: #2563eb; }
+.peta-badge {
+  position: absolute; top: 10px; left: 10px; z-index: 500;
+  padding: 3px 10px; border-radius: 999px;
+  background: rgba(255, 255, 255, .95);
+  color: var(--biru); border: 1px solid var(--biru);
+  font-size: 12px; font-weight: 700; line-height: 1.5;
+  font-variant-numeric: tabular-nums; letter-spacing: .1px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, .18);
+  pointer-events: none;
+}
+.peta-badge.di-luar { color: var(--merah); border-color: var(--merah); }
 
-.langkah-label { font-size: 12.5px; font-weight: 700; color: var(--biru-tua); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+/* -------------------------------------------------- Absen satu layar */
+.absen-status {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; margin-bottom: 12px;
+  border-radius: 14px; border: 1px solid transparent;
+  font-size: 13px; line-height: 1.35;
+}
+.absen-status b { font-size: 13.5px; font-weight: 700; }
+.absen-status span { color: inherit; opacity: .8; }
+.absen-status .ico { width: 20px; height: 20px; flex: 0 0 auto; }
+.absen-status .btn { margin-left: auto; flex: 0 0 auto; }
+.absen-status.is-memuat { background: #f5f6fa; color: var(--abu-redup); }
+.absen-status.is-ok { background: var(--hijau-bg); color: var(--hijau); border-color: rgba(4, 120, 87, .18); }
+.absen-status.is-err { background: var(--merah-bg); color: var(--merah); border-color: rgba(220, 38, 38, .18); }
+.spinner-sm { width: 18px; height: 18px; border-width: 2.5px; }
 
-/* Kamera */
-.kamera-viewport {
+.absen-kartu {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--abu-card); border: 1px solid var(--garis);
+  border-radius: 20px; padding: 14px;
+  box-shadow: var(--bayang);
+}
+.absen-foto {
+  flex: 0 0 auto; position: relative;
+  width: 92px; height: 92px; border-radius: 50%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  background: var(--biru-muda); color: var(--biru-tua);
+  border: 1.5px dashed #c7d2fe; cursor: pointer; overflow: hidden;
+  transition: transform .12s ease;
+}
+.absen-foto:active { transform: scale(.97); }
+.absen-foto.is-isi { border-style: solid; border-color: #fff; padding: 0; background: #0f172a; }
+.absen-foto-ikon { display: flex; }
+.absen-foto-ikon .ico { width: 24px; height: 24px; }
+.absen-foto-label { font-size: 11.5px; font-weight: 700; letter-spacing: .02em; }
+.absen-foto-img { width: 100%; height: 100%; object-fit: cover; }
+.absen-foto-edit {
+  position: absolute; right: 2px; bottom: 2px;
+  width: 26px; height: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: #fff; color: var(--biru-tua);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, .28);
+}
+.absen-foto-edit .ico { width: 14px; height: 14px; }
+
+.absen-meta { min-width: 0; flex: 1; }
+.absen-jenis { font-size: 15.5px; font-weight: 800; margin-bottom: 6px; }
+.absen-baris {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  font-size: 12.5px; color: var(--abu-redup); padding: 2px 0;
+}
+.absen-baris b { color: var(--abu-teks); font-size: 13px; font-weight: 700; text-align: right; }
+.absen-baris .absen-waktu { font-size: 13.5px; }
+.absen-alasan { margin-top: 12px; }
+.absen-alasan .field { margin-bottom: 0; }
+
+.absen-aksi { display: flex; gap: 8px; align-items: stretch; }
+.absen-aksi #absen-batal { flex: 0 0 auto; }
+.btn-kirim-absen { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.btn-kirim-absen .ico { width: 18px; height: 18px; }
+
+.absen-sukses { text-align: center; padding: 18px 8px 10px; }
+.absen-sukses-ikon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 64px; height: 64px; border-radius: 50%; margin-bottom: 10px;
+  background: var(--hijau-bg); color: var(--hijau);
+}
+.absen-sukses-ikon .ico { width: 34px; height: 34px; }
+.absen-sukses h3 { margin: 0 0 4px; font-size: 18px; font-weight: 800; }
+
+/* Kamera inline (di dalam kartu absen) */
+.absen-kamera { margin-bottom: 12px; }
+.absen-kamera-tampil {
   position: relative;
   background: #0f172a;
   border-radius: 18px;
   overflow: hidden;
-  aspect-ratio: 3 / 4;
-  max-height: 46dvh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  height: 220px;
+  display: flex; align-items: center; justify-content: center;
 }
-.kamera-viewport video, .kamera-viewport img {
-  width: 100%; height: 100%;
-  object-fit: cover;
+.absen-kamera-tampil video {
+  width: 100%; height: 100%; object-fit: cover;
 }
-.kamera-viewport video.mirror, .kamera-viewport img.mirror { transform: scaleX(-1); }
+.absen-kamera-tampil video.mirror { transform: scaleX(-1); }
+.absen-kamera-aksi { display: flex; gap: 8px; margin-top: 8px; }
+.absen-kamera-aksi .btn { flex: 1; }
 .kamera-grid {
   position: absolute; inset: 0;
   background:
-    radial-gradient(circle at 50% 42%, transparent 26%, rgba(0,0,0,.35) 27%);
+    radial-gradient(circle at 50% 42%, transparent 30%, rgba(0,0,0,.32) 31%);
   pointer-events: none;
 }
-.info-foto { font-size: 12.5px; color: var(--abu-redup); text-align: center; margin: 8px 0 0; }
+
 .jarak-besar { font-size: 17px; font-weight: 700; }
 .kv { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; padding: 7px 0; border-bottom: 1px solid #eef0f6; }
 .kv:last-child { border-bottom: none; }

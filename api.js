@@ -14,6 +14,46 @@ var BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwbguwykX8068cSwOslBm
 var TOKEN_KEY = 'absensi_token';
 var USER_KEY = 'absensi_user';
 
+/* ---------------------------------------------------------------- */
+/* Cache baca singkat                                                */
+/* ---------------------------------------------------------------- */
+/*
+ * Pindah menu tidak perlu menunggu jaringan setiap kali. Action yang hanya
+ * membaca data disimpan sebentar (di memori, bukan localStorage) lalu dipakai
+ * ulang saat layar yang sama dibuka lagi. Setiap action yang mengubah data —
+ * atau action apa pun yang tidak ada di daftar ini — membersihkan seluruh
+ * cache, jadi tampilan tidak pernah memakai data yang sudah basi setelah
+ * absen/izin/koreksi/karyawan berubah.
+ */
+var API_CACHE_MS = {
+  status_hari_ini: 20000,
+  dashboard_hari_ini: 15000,
+  izin_saya: 20000,
+  riwayat_saya: 60000,
+  absensi_list: 30000,
+  izin_list: 20000,
+  karyawan_list: 60000,
+  lokasi_list: 120000,
+  rekap_bulanan: 60000,
+  log_list: 20000,
+  pengaturan_get: 120000,
+  libur_list: 120000
+};
+var apiCache = {};
+
+function apiKunci(action, data) {
+  try { return action + '|' + JSON.stringify(data || {}); } catch (e) { return action; }
+}
+function apiBersihkanCache() { apiCache = {}; }
+/** Nilai cache yang masih segar, atau null. Sinkron agar layar bisa tahu lebih dulu. */
+function apiTersimpan(action, data) {
+  var ms = API_CACHE_MS[action];
+  if (!ms) return null;
+  var isi = apiCache[apiKunci(action, data)];
+  if (!isi || (Date.now() - isi.waktu) > ms) return null;
+  return isi.data;
+}
+
 function getToken() {
   try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; }
 }
@@ -42,6 +82,13 @@ function api(action, data) {
       code: 'VALIDASI',
       message: 'URL backend belum diisi. Buka file api.js lalu isi nilai BACKEND_URL (lihat README bagian B).'
     });
+  }
+
+  var msCache = API_CACHE_MS[action];
+  var kunciCache = msCache ? apiKunci(action, data) : null;
+  if (kunciCache) {
+    var tersimpan = apiTersimpan(action, data);
+    if (tersimpan) return Promise.resolve(tersimpan);
   }
 
   var body = JSON.stringify({
@@ -94,7 +141,11 @@ function api(action, data) {
             message: 'Respons server bukan JSON. Periksa URL BACKEND_URL dan pastikan web app sudah di-deploy sebagai "Execute as: Me, Access: Anyone".'
           };
         }
-        if (json && json.ok) return json.data;
+        if (json && json.ok) {
+          if (kunciCache) apiCache[kunciCache] = { waktu: Date.now(), data: json.data };
+          else apiBersihkanCache();   // action pengubah data: cache lama tidak berlaku
+          return json.data;
+        }
         var err = (json && json.error) || {};
         throw {
           code: err.code || 'SERVER_ERROR',

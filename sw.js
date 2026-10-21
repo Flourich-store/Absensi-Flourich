@@ -5,13 +5,20 @@
  * "mode offline" di luar cakupan (bagian 5 PRD).
  */
 
-var CACHE = 'absensi-shell-v8'; // Tahap 8: ikon lewat sprite <symbol> + <use>
+var CACHE = 'absensi-shell-v10'; // Tahap 10: font lokal + absen satu layar
 var SHELL = [
   './',
   './index.html',
   './styles.css',
+  './fonts/plus-jakarta-sans-latin.woff2',
+  './fonts/plus-jakarta-sans-latin-ext.woff2',
   './api.js',
   './app.js',
+  './vendor/leaflet/leaflet.js',
+  './vendor/leaflet/leaflet.css',
+  './vendor/leaflet/images/marker-icon.png',
+  './vendor/leaflet/images/marker-icon-2x.png',
+  './vendor/leaflet/images/marker-shadow.png',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',

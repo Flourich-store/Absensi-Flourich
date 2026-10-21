@@ -2,7 +2,7 @@
  * app.js — seluruh layar aplikasi absensi (bagian 11 PRD).
  * Desain mobile-first, navigasi tab di bawah, semua teks berbahasa Indonesia.
  *
- * Layar karyawan : Beranda (alur absen 5 langkah), Izin, Riwayat, Profil
+ * Layar karyawan : Beranda (absen satu layar), Izin, Riwayat, Profil
  * Layar admin    : Dashboard, Absensi (+koreksi), Persetujuan Izin, Karyawan,
  *                  Lokasi, Izin, Riwayat, Pengaturan (+Libur), Rekap, Log, Profil
  *
@@ -76,6 +76,24 @@ var state = {
 
 var jamTimer = null;
 var SCREENS = {};
+
+/*
+ * Generasi layar. Setiap perpindahan menu menaikkan nomornya.
+ * Masalah lama: jawaban jaringan yang datang terlambat menulis ke #content
+ * yang sudah dipakai menu lain — menu baru sempat menampilkan data menu
+ * sebelumnya. apiLayar() mengikat permintaan ke generasi saat ia dimulai;
+ * bila generasi sudah berubah, rantai .then/.catch layar lama dihentikan
+ * (promise yang tidak pernah selesai) sehingga tidak ada lagi tulisan nyasar.
+ */
+var layarGen = 0;
+
+function apiLayar(action, data) {
+  var gen = layarGen;
+  return api(action, data).then(function (d) {
+    if (gen !== layarGen) return new Promise(function () {});
+    return d;
+  });
+}
 
 function $(id) { return document.getElementById(id); }
 
@@ -335,6 +353,7 @@ var LAYAR_ADMIN = {
 };
 
 function bukaScreen(id) {
+  layarGen++;                      // batalkan semua render layar sebelumnya
   var s = SCREENS[id] || SCREENS.beranda;
   id = SCREENS[id] ? id : 'beranda';
   if (LAYAR_ADMIN[id] && !(state.user && state.user.role === 'admin')) {
@@ -381,9 +400,19 @@ function statusPill(status) {
 }
 
 function berandaHTML(h, user) {
-  var pill = statusPill(h.status);
+  var admin = !!(user && user.role === 'admin');
+  var pill = admin ? { teks: 'Administrator', kelas: 'info' } : statusPill(h.status);
   var tombol = '';
-  if (h.jenis_absen_berikut === 'masuk') {
+  if (admin) {
+    // Administrator mengelola absensi karyawan, bukan melakukan absensi sendiri.
+    tombol =
+      '<div class="banner info">' + ikonSvg('kunci') + ' Akun administrator tidak melakukan absensi. ' +
+      'Absensi karyawan dipantau lewat menu Dashboard dan Absensi.</div>' +
+      '<div class="btn-row">' +
+        '<button type="button" class="btn btn-primary" id="btn-ke-dashboard">Dashboard hari ini</button>' +
+        '<button type="button" class="btn btn-outline" id="btn-ke-absensi">Daftar absensi</button>' +
+      '</div>';
+  } else if (h.jenis_absen_berikut === 'masuk') {
     tombol = '<button type="button" class="btn btn-primary btn-big" id="btn-absen-masuk">' +
       'Absen Masuk<span class="btn-sub">Batas toleransi ' + esc(tampilJam(h.jam_masuk)) + ' + ' +
       esc(h.toleransi_menit) + ' menit</span></button>';
@@ -435,17 +464,18 @@ function berandaHTML(h, user) {
       '<span class="status-pill ' + pill.kelas + '">' + pill.teks + '</span>' +
     '</div>' +
     tombol +
-    '<div class="card mt"><p class="card-title">Hari ini</p>' + lokasiInfo +
-      '<div class="kv"><span>Jam kerja</span><b>' + esc(tampilJam(h.jam_masuk)) + ' – ' + esc(tampilJam(h.jam_pulang)) + '</b></div>' +
-      '<div class="kv"><span>Akurasi GPS maksimal</span><b>' + esc(h.akurasi_maks_m) + ' m</b></div>' +
-    '</div>' +
-    detailAbsen;
+    (admin ? '' :
+      '<div class="card mt"><p class="card-title">Hari ini</p>' + lokasiInfo +
+        '<div class="kv"><span>Jam kerja</span><b>' + esc(tampilJam(h.jam_masuk)) + ' – ' + esc(tampilJam(h.jam_pulang)) + '</b></div>' +
+        '<div class="kv"><span>Akurasi GPS maksimal</span><b>' + esc(h.akurasi_maks_m) + ' m</b></div>' +
+      '</div>' +
+      detailAbsen);
 }
 
 SCREENS.beranda = {
   title: 'Beranda',
   render: function (el) {
-    api('status_hari_ini', {})
+    apiLayar('status_hari_ini', {})
       .then(function (h) {
         state.hariIni = h;
         state.user.wajib_ganti_pin = h.wajib_ganti_pin;
@@ -456,6 +486,10 @@ SCREENS.beranda = {
         if (bPulang) bPulang.addEventListener('click', function () { bukaAlurAbsen('pulang'); });
         var bPin = $('btn-ke-ganti-pin');
         if (bPin) bPin.addEventListener('click', function () { bukaScreen('profil'); });
+        var bDash = $('btn-ke-dashboard');
+        if (bDash) bDash.addEventListener('click', function () { bukaScreen('dashboard'); });
+        var bAbs = $('btn-ke-absensi');
+        if (bAbs) bAbs.addEventListener('click', function () { bukaScreen('absensi'); });
         mulaiJam(el);
       })
       .catch(function (e) {
@@ -467,158 +501,163 @@ SCREENS.beranda = {
 };
 
 /* ================================================================ */
-/* Alur Absen — layar bertahap 5 langkah (bagian 11 PRD)             */
-/* 1) cek lokasi & jarak  2) kamera depan selfie  3) alasan terlambat */
-/* 4) konfirmasi + kirim  5) hasil sukses / pesan error              */
+/* Alur Absen — SATU layar (peta, selfie, kirim)                     */
+/*                                                                   */
+/* Alur 5 langkah diganti satu layar: peta area absen di atas, kartu  */
+/* selfie + ringkasan di tengah, satu tombol Kirim di bawah. Semua    */
+/* syarat PRD tetap berlaku dan diperiksa sebelum kirim:              */
+/*   - lokasi GPS harus valid di dalam radius (hasil preview server)  */
+/*   - selfie wajib diambil saat itu (kamera depan, tanpa galeri)     */
+/*   - alasan keterlambatan wajib bila lewat toleransi                */
+/* Penolakan tetap diputuskan server; layar hanya menyembunyikan      */
+/* tombol Kirim selama syarat belum lengkap.                          */
 /* ================================================================ */
 
-function langkahAbsen() {
-  var a = state.absen;
-  var daftar = ['Lokasi', 'Kamera'];
-  if (a && a.hasil && a.hasil.alasan_wajib && a.jenis === 'masuk') daftar.push('Alasan');
-  daftar.push('Kirim', 'Selesai');
-  return daftar;
+var PETA_MIN_ZOOM = 3;
+var PETA_TILE = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+var petaAbsen = null;   // { peta: L.Map, lapisan: L.LayerGroup }
+var absenJamTimer = null;
+
+function petaSiap() {
+  return typeof L !== 'undefined' && L && typeof L.map === 'function';
 }
 
-function gambarStepper() {
-  var daftar = langkahAbsen();
-  var a = state.absen;
-  // indeks langkah aktif di antara daftar (tanpa memperhitungkan langkah 5 loading)
-  $('absen-stepper').innerHTML = daftar.map(function (_, i) {
-    return '<span class="' + (i < a.langkah ? 'on' : '') + '"></span>';
-  }).join('');
-  $('absen-title').textContent = a.jenis === 'masuk' ? 'Absen Masuk' : 'Absen Pulang';
+function angkaAtauNull(v) {
+  if (v === null || v === undefined || v === '') return null;
+  var n = Number(v);
+  return isFinite(n) ? n : null;
 }
 
-function bukaAlurAbsen(jenis) {
-  state.absen = { jenis: jenis, langkah: 1, hasil: null, posisi: null, foto: null, fotoKb: 0, alasan: '' };
-  $('overlay-absen').hidden = false;
-  renderLangkahAbsen();
-}
-function tutupAlurAbsen() {
-  matikanKamera();
-  $('overlay-absen').hidden = true;
-  state.absen = null;
+function hancurkanPeta() {
+  if (petaAbsen && petaAbsen.peta) {
+    try { petaAbsen.peta.remove(); } catch (e) {}
+  }
+  petaAbsen = null;
+  var bungkus = $('peta-bungkus');
+  if (bungkus) bungkus.hidden = true;
 }
 
-function renderLangkahAbsen() {
-  var a = state.absen;
-  if (!a) return;
-  gambarStepper();
-  var body = $('absen-body');
-  var foot = $('absen-foot');
-  foot.hidden = true;
-  foot.innerHTML = '';
-
-  if (a.langkah === 1) renderLangkahLokasi(body, foot);
-  else if (a.langkah === 2) renderLangkahKamera(body, foot);
-  else if (a.langkah === 3) renderLangkahAlasan(body, foot);
-  else if (a.langkah === 4) renderLangkahKonfirmasi(body, foot);
-  else if (a.langkah === 5) renderLangkahHasil(body, foot);
+function labelJarak(m) {
+  var n = angkaAtauNull(m);
+  if (n === null) return '-';
+  if (n < 1000) return Math.round(n) + ' m';
+  return (n / 1000).toFixed(1).replace('.', ',') + ' km';
 }
 
-/* ---- Langkah 1: cek lokasi & jarak ---- */
-
-function renderLangkahLokasi(body, foot) {
-  var a = state.absen;
-  body.innerHTML =
-    '<p class="langkah-label">Langkah 1 — Cek lokasi</p>' +
-    '<div id="lokasi-hasil"><div class="loading-state"><div class="spinner"></div>' +
-    '<p>Mencari titik GPS… maksimal 15 detik</p></div></div>';
-  foot.hidden = false;
-  foot.innerHTML = '<button type="button" class="btn btn-ghost btn-block" id="absen-batal">Batal</button>';
-  $('absen-batal').addEventListener('click', tutupAlurAbsen);
-  mintaLokasi(lanjutPreview);
+function titikPeta(warna, jenis) {
+  return L.divIcon({
+    className: 'peta-marker',
+    html: '<span class="peta-titik' + (jenis ? ' ' + jenis : '') + '" style="--warna:' + warna + '"></span>',
+    iconSize: [22, 22],
+    iconAnchor: [11, 11]
+  });
 }
 
-function lanjutPreview(posisi, galat) {
-  var a = state.absen;
-  if (!a) return;
-  var kotak = $('lokasi-hasil');
-  if (!kotak) return;
-  var foot = $('absen-foot');
+/**
+ * Gambar (atau perbarui) peta area absen.
+ * @param {object} posisi  {lat,lng,akurasi} hasil GPS pengguna
+ * @param {object} lokasi  {latitude,longitude,radius_m,nama_lokasi} lokasi kerja
+ * @param {object} hasil   hasil preview_absen (opsional; null = belum divalidasi)
+ */
+function gambarPeta(posisi, lokasi, hasil) {
+  var bungkus = $('peta-bungkus');
+  var el = $('peta-lokasi');
+  if (!bungkus || !el) return;
 
-  if (galat) {
-    kotak.innerHTML =
-      '<div class="banner error"><strong>Lokasi tidak bisa dibaca.</strong><br>' + esc(galat.pesan) + '</div>' +
-      '<div class="card"><p class="card-title">Cara mengaktifkan</p>' +
-      '<ol class="small muted" style="padding-left:18px;margin:0">' +
-      '<li>Buka pengaturan peramban/situs ini (ikon gembok di bilah alamat).</li>' +
-      '<li>Pilih <b>Izin lokasi → Izinkan</b>.</li>' +
-      '<li>Pastikan GPS perangkat menyala (Mode Lokasi aktif).</li>' +
-      '<li>Kembali ke halaman ini lalu tekan Coba Lagi.</li></ol></div>';
-    foot.innerHTML =
-      '<div class="btn-row"><button type="button" class="btn btn-ghost" id="absen-batal">Batal</button>' +
-      '<button type="button" class="btn btn-primary" id="absen-ulang-lokasi">Coba Lagi</button></div>';
-    $('absen-batal').addEventListener('click', tutupAlurAbsen);
-    $('absen-ulang-lokasi').addEventListener('click', function () { renderLangkahLokasi(body, foot); });
+  var latLokasi = lokasi ? angkaAtauNull(lokasi.latitude) : null;
+  var lngLokasi = lokasi ? angkaAtauNull(lokasi.longitude) : null;
+  if (!petaSiap() || !posisi || latLokasi === null || lngLokasi === null) {
+    hancurkanPeta();
     return;
   }
 
-  a.posisi = posisi; // dipakai ulang saat konfirmasi
-  api('preview_absen', {
-    jenis: a.jenis,
-    lat: posisi.lat,
-    lng: posisi.lng,
-    akurasi: posisi.akurasi
-  }).then(function (hasil) {
-    a.hasil = hasil;
-    var b;
-    if (hasil.valid) {
-      b = '<div class="card"><p class="card-title">' + ikonSvg('lokasi') + ' ' + esc(hasil.lokasi ? hasil.lokasi.nama_lokasi : 'Lokasi kerja') + '</p>' +
-        '<div class="kv"><span>Jarak Anda ke lokasi</span><b class="jarak-besar">' + hasil.jarak_m + ' m</b></div>' +
-        '<div class="kv"><span>Radius absen</span><b>' + hasil.radius_m + ' m</b></div>' +
-        '<div class="kv"><span>Akurasi GPS</span><b>' + hasil.akurasi + ' m (maks ' + hasil.akurasi_maks_m + ' m)</b></div>' +
-        '</div>' +
-        (hasil.terlambat
-          ? '<div class="banner">⏰ Anda terlambat — alasan keterlambatan wajib diisi pada langkah berikutnya.</div>'
-          : '<div class="banner info">' + ikonSvg('centang-lingkar') + ' Lokasi valid. Anda dapat melanjutkan ke selfie.</div>');
-    } else {
-      b = '<div class="banner error"><strong>' + esc(kodeJudul(hasil.code)) + '</strong><br>' + esc(hasil.pesan) + '</div>';
-      if (hasil.jarak_m !== null && hasil.radius_m !== null) {
-        b += '<div class="card"><div class="kv"><span>Jarak Anda</span><b>' + hasil.jarak_m + ' m</b></div>' +
-          '<div class="kv"><span>Radius absen</span><b>' + hasil.radius_m + ' m</b></div></div>';
-      }
-    }
-    kotak.innerHTML = b;
-    foot.hidden = false;
-    var label = hasil.valid ? 'Lanjut ke Selfie' : 'Coba Lagi';
-    foot.innerHTML =
-      '<div class="btn-row"><button type="button" class="btn btn-ghost" id="absen-batal">Batal</button>' +
-      '<button type="button" class="btn ' + (hasil.valid ? 'btn-primary' : 'btn-outline') + '" id="absen-lanjut">' +
-      label + '</button></div>';
-    $('absen-batal').addEventListener('click', tutupAlurAbsen);
-    $('absen-lanjut').addEventListener('click', function () {
-      if (hasil.valid) {
-        // selfie wajib diambil segar tiap absen
-        state.absen.foto = null;
-        state.absen.langkah = hasil.alasan_wajib && state.absen.jenis === 'masuk' ? 2 : 2;
-        renderLangkahAbsen();
-      } else {
-        renderLangkahLokasi(body, foot); // ulangi ambil lokasi
-      }
+  var radius = angkaAtauNull(hasil && hasil.radius_m) || angkaAtauNull(lokasi.radius_m) || 100;
+  var jarak = hasil ? angkaAtauNull(hasil.jarak_m) : null;
+  var valid = hasil ? !!hasil.valid : null;          // null = belum divalidasi server
+  var warna = valid === false ? '#dc2626' : '#4f46e5';
+
+  bungkus.hidden = false;
+
+  if (!petaAbsen) {
+    var p = L.map(el, {
+      zoomControl: false,
+      scrollWheelZoom: false,   // gulir halaman tidak "tertahan" peta di ponsel
+      attributionControl: true,
+      minZoom: PETA_MIN_ZOOM
     });
-  }).catch(function (e) {
-    if (tanganiErrorSesi(e)) return;
-    kotak.innerHTML = errorHTML(errPesan(e));
-    foot.hidden = false;
-    foot.innerHTML =
-      '<div class="btn-row"><button type="button" class="btn btn-ghost" id="absen-batal">Batal</button>' +
-      '<button type="button" class="btn btn-outline" id="absen-ulang-lokasi">Coba Lagi</button></div>';
-    $('absen-batal').addEventListener('click', tutupAlurAbsen);
-    $('absen-ulang-lokasi').addEventListener('click', function () { renderLangkahLokasi(body, foot); });
-  });
+    L.tileLayer(PETA_TILE, {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(p);
+    petaAbsen = { peta: p, lapisan: L.layerGroup().addTo(p) };
+  }
+
+  var lap = petaAbsen.lapisan;
+  lap.clearLayers();
+
+  // area absen resmi
+  L.circle([latLokasi, lngLokasi], {
+    radius: radius, color: warna, weight: 2, opacity: .95,
+    fillColor: warna, fillOpacity: .13, interactive: false
+  }).addTo(lap);
+  L.marker([latLokasi, lngLokasi], {
+    icon: titikPeta(warna, 'kantor'), interactive: false, keyboard: false
+  }).addTo(lap);
+
+  // garis ukur antara posisi pengguna dan pusat area
+  if (jarak !== null && jarak > 0) {
+    L.polyline([[posisi.lat, posisi.lng], [latLokasi, lngLokasi]], {
+      color: warna, weight: 2, opacity: .75, dashArray: '5 7', interactive: false
+    }).addTo(lap);
+  }
+
+  // jarak ditulis sebagai lencana di sudut peta: pada jarak pendek titik dan
+  // pusat hanya beberapa piksel terpisah, label di tengah garis jadi tumpang
+  // tindih dengan titik pengguna.
+  var lencana = $('peta-badge');
+  if (lencana) {
+    lencana.hidden = jarak === null;
+    lencana.className = 'peta-badge' + (valid === false ? ' di-luar' : '');
+    if (jarak !== null) lencana.textContent = 'Jarak ' + labelJarak(jarak);
+  }
+
+  // posisi pengguna + cincin akurasi GPS
+  if (posisi.akurasi > 0) {
+    L.circle([posisi.lat, posisi.lng], {
+      radius: Math.min(posisi.akurasi, 5000), color: '#2563eb', weight: 1, opacity: .4,
+      fillColor: '#2563eb', fillOpacity: .1, interactive: false
+    }).addTo(lap);
+  }
+  L.marker([posisi.lat, posisi.lng], {
+    icon: titikPeta('#2563eb', 'saya'), interactive: false, keyboard: false
+  }).addTo(lap);
+
+  // bingkai: pusat + tepi lingkaran + posisi pengguna
+  var batas = L.latLng(latLokasi, lngLokasi).toBounds(radius * 2.4);
+  batas.extend([posisi.lat, posisi.lng]);
+  petaAbsen.peta.fitBounds(batas, { padding: [16, 16], maxZoom: 17 });
+
+  // kontainer bisa baru berukuran setelah overlay tampil
+  setTimeout(function () {
+    if (petaAbsen && petaAbsen.peta) petaAbsen.peta.invalidateSize();
+  }, 60);
+
+  var ket = $('peta-ket');
+  if (ket) {
+    ket.innerHTML = ikonSvg('bumi') + ' <span>Lingkaran absen ' + esc(Math.round(radius)) + ' m' +
+      (valid === false ? ' — posisi Anda di luar area' : ' · titik biru posisi Anda') + '</span>';
+  }
 }
 
 function kodeJudul(kode) {
   switch (kode) {
-    case 'DI_LUAR_RADIUS': return 'Di luar radius lokasi kerja.';
-    case 'AKURASI_BURUK': return 'Akurasi GPS buruk.';
-    case 'SUDAH_ABSEN': return 'Anda sudah absen.';
-    case 'BELUM_ABSEN_MASUK': return 'Belum absen masuk.';
-    case 'HARI_LIBUR': return 'Hari ini bukan hari kerja.';
-    case 'SEDANG_IZIN': return 'Anda sedang izin.';
-    default: return 'Absen tidak dapat dilanjutkan.';
+    case 'DI_LUAR_RADIUS': return 'Di luar radius lokasi kerja';
+    case 'AKURASI_BURUK': return 'Akurasi GPS buruk';
+    case 'SUDAH_ABSEN': return 'Anda sudah absen';
+    case 'BELUM_ABSEN_MASUK': return 'Belum absen masuk';
+    case 'HARI_LIBUR': return 'Hari ini bukan hari kerja';
+    case 'SEDANG_IZIN': return 'Anda sedang izin';
+    default: return 'Absen tidak dapat dilanjutkan';
   }
 }
 
@@ -650,39 +689,339 @@ function mintaLokasi(cb) {
   );
 }
 
-function fileURL(stream) {
-  try { return URL.createObjectURL(stream); } catch (e) { return null; }
+/* ---- Buka / tutup layar absen ------------------------------------ */
+
+function bukaAlurAbsen(jenis) {
+  // Administrator mengelola absensi, bukan melakukan absensi.
+  if (state.user && state.user.role === 'admin') {
+    toast('Akun administrator tidak melakukan absensi.');
+    return;
+  }
+  state.absen = {
+    jenis: jenis,
+    posisi: null,
+    hasil: null,
+    galatLokasi: null,
+    memuat: true,
+    foto: null,
+    fotoKb: 0,
+    alasan: '',
+    kamera: false,
+    mengirim: false,
+    sukses: null,
+    gagal: null,
+    gagalKode: null
+  };
+  $('overlay-absen').hidden = false;
+  $('absen-title').textContent = jenis === 'masuk' ? 'Absen Masuk' : 'Absen Pulang';
+  gambarAbsen();
+  muatLokasiAbsen();
 }
 
-/* ---- Langkah 2: kamera depan untuk selfie ---- */
+function tutupAlurAbsen() {
+  matikanKamera();
+  hancurkanPeta();
+  if (absenJamTimer) { clearInterval(absenJamTimer); absenJamTimer = null; }
+  $('overlay-absen').hidden = true;
+  state.absen = null;
+}
+
+/* ---- Kerangka layar (dibangun sekali) ---------------------------- */
+
+function gambarAbsen() {
+  var a = state.absen;
+  if (!a) return;
+
+  $('absen-body').innerHTML =
+    '<section class="peta-bungkus" id="peta-bungkus" hidden>' +
+      '<div class="peta" id="peta-lokasi" role="img" ' +
+        'aria-label="Peta lokasi kerja, area absen, dan posisi Anda"></div>' +
+      '<span class="peta-badge" id="peta-badge" hidden></span>' +
+      '<p class="peta-ket small muted" id="peta-ket"></p>' +
+    '</section>' +
+    '<div class="absen-status" id="absen-status" role="status"></div>' +
+    '<div class="absen-kamera" id="absen-kamera" hidden></div>' +
+    '<div class="absen-kartu">' +
+      '<button type="button" class="absen-foto" id="absen-foto" aria-label="Ambil selfie"></button>' +
+      '<div class="absen-meta">' +
+        '<div class="absen-jenis" id="absen-jenis"></div>' +
+        '<div class="absen-baris"><span>Tanggal dan jam</span><b class="absen-waktu" id="absen-waktu"></b></div>' +
+        '<div class="absen-baris" id="absen-baris-tambahan" hidden><span id="absen-label-tambahan"></span>' +
+          '<b id="absen-tambahan"></b></div>' +
+        '<div class="absen-baris"><span>Jarak ke lokasi</span><b id="absen-jarak">—</b></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="absen-alasan" id="absen-alasan" hidden>' +
+      '<label class="field"><span>Alasan keterlambatan (wajib)</span>' +
+      '<textarea id="absen-alasan-input" maxlength="500" ' +
+        'placeholder="contoh: Macet di jalan tol" aria-describedby="absen-alasan-hint"></textarea>' +
+      '<div class="field-hint" id="absen-alasan-hint"><span id="absen-alasan-hitung">0</span>/500 — minimal 5 karakter</div>' +
+      '</label>' +
+    '</div>' +
+    '<div id="absen-pesan"></div>';
+
+  var foot = $('absen-foot');
+  foot.hidden = false;
+  foot.innerHTML =
+    '<div class="absen-aksi">' +
+      '<button type="button" class="btn btn-ghost" id="absen-batal">Batal</button>' +
+      '<button type="button" class="btn btn-primary btn-kirim-absen" id="btn-kirim-absen" disabled>' +
+        ikonSvg('kirim') + '<span>Kirim</span>' +
+      '</button>' +
+    '</div>';
+
+  $('absen-batal').addEventListener('click', tutupAlurAbsen);
+  $('btn-kirim-absen').addEventListener('click', kirimAbsen);
+
+  // Tombol foto: tanpa foto -> buka kamera; sudah ada foto -> ulangi.
+  $('absen-foto').addEventListener('click', function () {
+    var s = state.absen;
+    if (!s || s.kamera || s.sukses || s.mengirim) return;
+    if (s.foto) { s.foto = null; s.fotoKb = 0; perbaruiAbsen(); }
+    bukaKamera();
+  });
+
+  var input = $('absen-alasan-input');
+  input.value = a.alasan || '';
+  input.addEventListener('input', function () {
+    if (!state.absen) return;
+    state.absen.alasan = input.value;
+    $('absen-alasan-hitung').textContent = String(input.value.length);
+    perbaruiAbsen();
+  });
+
+  perbaruiAbsen();
+  mulaiJamAbsen();
+}
+
+/** Tombol "Coba Lagi"/"Perbarui" pada blok status selalu dipasang ulang. */
+function pasangUlangLokasi() {
+  var b = $('absen-ulang-lokasi');
+  if (b) b.addEventListener('click', muatLokasiAbsen);
+}
+
+function alasanCukup(a) {
+  if (!a.hasil || !a.hasil.alasan_wajib || a.jenis !== 'masuk') return true;
+  return String(a.alasan || '').trim().length >= 5;
+}
+
+function siapKirim(a) {
+  return !!(a && !a.mengirim && !a.sukses && a.posisi && a.hasil && a.hasil.valid && a.foto && alasanCukup(a));
+}
+
+/** Segarkan seluruh bagian layar dari state.absen. */
+function perbaruiAbsen() {
+  var a = state.absen;
+  var status = $('absen-status');
+  if (!a || !status || a.sukses) return;
+
+  var h = a.hasil;
+  var valid = !!(h && h.valid);
+
+  // --- status lokasi
+  if (a.memuat) {
+    status.className = 'absen-status is-memuat';
+    status.innerHTML = '<span class="spinner spinner-sm" aria-hidden="true"></span>' +
+      '<div><b>Mengambil lokasi GPS…</b><br><span>Pastikan Mode Lokasi aktif.</span></div>';
+  } else if (a.galatLokasi) {
+    status.className = 'absen-status is-err';
+    status.innerHTML = ikonSvg('peringatan') +
+      '<div><b>Lokasi tidak terbaca</b><br><span>' + esc(a.galatLokasi) + '</span></div>' +
+      '<button type="button" class="btn btn-outline btn-sm" id="absen-ulang-lokasi">Coba Lagi</button>';
+    pasangUlangLokasi();
+  } else if (h && !h.valid) {
+    status.className = 'absen-status is-err';
+    status.innerHTML = ikonSvg('silang-lingkar') +
+      '<div><b>' + esc(kodeJudul(h.code)) + '</b><br><span>' + esc(h.pesan) + '</span></div>' +
+      '<button type="button" class="btn btn-outline btn-sm" id="absen-ulang-lokasi">Coba Lagi</button>';
+    pasangUlangLokasi();
+  } else if (h) {
+    status.className = 'absen-status is-ok';
+    status.innerHTML = ikonSvg('centang-lingkar') +
+      '<div><b>Di dalam area absen</b><br><span>' + esc(labelJarak(h.jarak_m)) + ' dari pusat · akurasi GPS ' +
+      esc(h.akurasi) + ' m</span></div>' +
+      '<button type="button" class="btn btn-ghost btn-sm" id="absen-ulang-lokasi">Perbarui</button>';
+    pasangUlangLokasi();
+  }
+
+  // --- foto selfie
+  var foto = $('absen-foto');
+  if (foto) {
+    if (a.foto) {
+      foto.className = 'absen-foto is-isi';
+      foto.innerHTML = '<img class="absen-foto-img" src="' + a.foto + '" alt="Selfie absensi">' +
+        '<span class="absen-foto-edit" aria-hidden="true">' + ikonSvg('pensil') + '</span>';
+      foto.setAttribute('aria-label', 'Ulangi selfie');
+    } else {
+      foto.className = 'absen-foto';
+      foto.innerHTML = '<span class="absen-foto-ikon" aria-hidden="true">' + ikonSvg('kamera') + '</span>' +
+        '<span class="absen-foto-label">Selfie</span>';
+      foto.setAttribute('aria-label', 'Ambil selfie');
+    }
+  }
+
+  // --- ringkasan
+  var jenisTeks = a.jenis === 'masuk' ? 'Absen Masuk' : 'Absen Pulang';
+  $('absen-jenis').textContent = jenisTeks;
+  $('absen-jarak').textContent = h ? labelJarak(h.jarak_m) : '—';
+
+  var tambahan = $('absen-baris-tambahan');
+  var hari = state.hariIni || {};
+  if (a.jenis === 'masuk' && hari.jam_masuk) {
+    $('absen-label-tambahan').textContent = 'Batas jam masuk';
+    $('absen-tambahan').textContent = tampilJam(hari.jam_masuk) + ' + ' + (hari.toleransi_menit || 0) + ' mnt';
+    tambahan.hidden = false;
+  } else if (a.jenis === 'pulang' && hari.absensi && hari.absensi.jam_masuk) {
+    $('absen-label-tambahan').textContent = 'Durasi kehadiran';
+    $('absen-tambahan').textContent = durasiHadir(hari.absensi.jam_masuk) || '—';
+    tambahan.hidden = false;
+  } else {
+    tambahan.hidden = true;
+  }
+
+  // --- alasan keterlambatan (muncul hanya bila server mewajibkannya)
+  var alasan = $('absen-alasan');
+  var wajibAlasan = !!(h && h.alasan_wajib && a.jenis === 'masuk');
+  alasan.hidden = !wajibAlasan;
+
+  // --- pesan kegagalan kirim
+  var pesan = $('absen-pesan');
+  pesan.innerHTML = a.gagal
+    ? '<div class="banner error"><strong>Absen ' + (a.jenis === 'masuk' ? 'masuk' : 'pulang') +
+      ' gagal.</strong><br>' + esc(a.gagal) + '</div>'
+    : '';
+
+  // --- tombol kirim
+  var tombol = $('btn-kirim-absen');
+  if (tombol) {
+    tombol.disabled = !siapKirim(a);
+    tombol.innerHTML = ikonSvg('kirim') + '<span>' + (a.mengirim ? 'Mengirim…' : 'Kirim') + '</span>';
+  }
+
+  perbaruiWaktuAbsen();
+}
+
+function perbaruiWaktuAbsen() {
+  var a = state.absen;
+  var e = $('absen-waktu');
+  if (!a || !e) return;
+  e.textContent = tanggalSingkat(new Date()) + ' | ' + jamSekarang();
+  if (a.jenis === 'pulang') {
+    var t = $('absen-tambahan');
+    var hari = state.hariIni || {};
+    if (t && hari.absensi && hari.absensi.jam_masuk) t.textContent = durasiHadir(hari.absensi.jam_masuk) || '—';
+  }
+}
+
+function mulaiJamAbsen() {
+  if (absenJamTimer) clearInterval(absenJamTimer);
+  absenJamTimer = setInterval(perbaruiWaktuAbsen, 1000);
+}
+
+function tanggalSingkat(d) {
+  try {
+    return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch (e) {
+    return String(d.getDate()) + '/' + (d.getMonth() + 1) + '/' + d.getFullYear();
+  }
+}
+
+/** "08:04:00" -> "1 jam 32 menit" (durasi sejak jam masuk). */
+function durasiHadir(jamMasuk) {
+  var s = tampilJam(jamMasuk);
+  var m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(String(s || ''));
+  if (!m) return '';
+  var d = new Date();
+  d.setHours(Number(m[1]), Number(m[2]), Number(m[3] || 0), 0);
+  var menit = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (!isFinite(menit) || menit < 0) return '';
+  return Math.floor(menit / 60) + ' jam ' + (menit % 60) + ' menit';
+}
+
+/* ---- Lokasi: GPS lalu validasi server ---------------------------- */
+
+function muatLokasiAbsen() {
+  var a = state.absen;
+  if (!a || a.sukses) return;
+  a.memuat = true;
+  a.hasil = null;
+  a.galatLokasi = null;
+  a.posisi = null;
+  perbaruiAbsen();
+
+  mintaLokasi(function (posisi, galat) {
+    if (state.absen !== a) return;          // layar sudah ditutup / dibuka ulang
+    if (galat) {
+      a.memuat = false;
+      a.galatLokasi = galat.pesan;
+      hancurkanPeta();
+      perbaruiAbsen();
+      return;
+    }
+    a.posisi = posisi;
+    var lokasiAwal = state.hariIni && state.hariIni.lokasi ? state.hariIni.lokasi : null;
+    gambarPeta(posisi, lokasiAwal, null);   // tampil segera, tanpa menunggu server
+    api('preview_absen', {
+      jenis: a.jenis,
+      lat: posisi.lat,
+      lng: posisi.lng,
+      akurasi: posisi.akurasi
+    }).then(function (hasil) {
+      if (state.absen !== a) return;
+      a.hasil = hasil;
+      a.memuat = false;
+      a.galatLokasi = null;
+      gambarPeta(posisi, hasil.lokasi || lokasiAwal, hasil);
+      perbaruiAbsen();
+    }).catch(function (e) {
+      if (state.absen !== a) return;
+      if (tanganiErrorSesi(e)) return;
+      a.memuat = false;
+      a.galatLokasi = errPesan(e);
+      perbaruiAbsen();
+    });
+  });
+}
+
+/* ---- Kamera selfie (inline di layar yang sama) ------------------- */
 
 var UKURAN_SISI_FOTO = 640;   // sesuai default foto_lebar_maks_px (bagian 7)
 var KUALITAS_FOTO = 0.7;      // sesuai default foto_kualitas
 
-function renderLangkahKamera(body, foot) {
-  body.innerHTML =
-    '<p class="langkah-label">Langkah 2 — Ambil selfie</p>' +
-    '<div id="kamera-area"><div class="loading-state"><div class="spinner"></div>' +
-    '<p>Membuka kamera depan…</p></div></div>' +
-    '<p class="info-foto">Kamera depan otomatis — tidak ada pilihan galeri, ' +
-    'foto harus diambil sekarang.</p>';
-  foot.hidden = false;
-  foot.innerHTML =
-    '<div class="btn-row">' +
-    '<button type="button" class="btn btn-ghost" id="absen-batal">Batal</button>' +
-    '<button type="button" class="btn btn-primary" id="btn-ambil-foto" disabled>Ambil Foto</button>' +
+function bukaKamera() {
+  var a = state.absen;
+  if (!a) return;
+  a.kamera = true;
+  var kotak = $('absen-kamera');
+  if (!kotak) return;
+  kotak.hidden = false;
+  kotak.innerHTML =
+    '<div class="absen-kamera-tampil" id="absen-kamera-tampil">' +
+      '<video id="kam-video" class="mirror" autoplay playsinline muted></video>' +
+      '<div class="kamera-grid" aria-hidden="true"></div>' +
+    '</div>' +
+    '<div class="absen-kamera-aksi">' +
+      '<button type="button" class="btn btn-ghost btn-sm" id="kamera-batal">Tutup kamera</button>' +
+      '<button type="button" class="btn btn-primary btn-sm" id="btn-ambil-foto" disabled>' +
+        ikonSvg('kamera') + ' Ambil</button>' +
     '</div>';
-  $('absen-batal').addEventListener('click', tutupAlurAbsen);
+  $('kamera-batal').addEventListener('click', tutupKamera);
   $('btn-ambil-foto').addEventListener('click', ambilFoto);
   mulaiKamera();
 }
 
+function tutupKamera() {
+  matikanKamera();
+  if (!state.absen) return;
+  state.absen.kamera = false;
+  var kotak = $('absen-kamera');
+  if (kotak) { kotak.hidden = true; kotak.innerHTML = ''; }
+  perbaruiAbsen();
+}
+
 function mulaiKamera() {
-  var area = $('kamera-area');
-  if (!area) return;
-  area.innerHTML =
-    '<div class="kamera-viewport"><video id="kam-video" class="mirror" autoplay playsinline muted>' +
-    '</video><div class="kamera-grid"></div></div>';
+  var tampil = $('absen-kamera-tampil');
+  if (!tampil) return;
 
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     galatKamera('Perangkat/peramban tidak mendukung kamera. Absen tidak bisa dilanjutkan.');
@@ -692,13 +1031,13 @@ function mulaiKamera() {
     video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 1280 } },
     audio: false
   }).then(function (stream) {
-    if (!state.absen || !$('kamera-area')) { // overlay sudah ditutup
+    if (!state.absen || !$('absen-kamera-tampil')) { // layar sudah berubah
       stream.getTracks().forEach(function (t) { t.stop(); });
       return;
     }
     state.absen.stream = stream;
     var video = $('kam-video');
-    video.srcObject = stream;
+    if (video) video.srcObject = stream;
     var tombol = $('btn-ambil-foto');
     if (tombol) tombol.disabled = false;
   }).catch(function (err) {
@@ -715,23 +1054,17 @@ function mulaiKamera() {
 }
 
 function galatKamera(pesan) {
-  var area = $('kamera-area');
-  if (!area) return;
-  area.innerHTML =
+  var kotak = $('absen-kamera');
+  if (!kotak) return;
+  kotak.hidden = false;
+  kotak.innerHTML =
     '<div class="banner error"><strong>Kamera bermasalah.</strong><br>' + esc(pesan) + '</div>' +
-    '<div class="card"><p class="card-title">Cara mengaktifkan</p>' +
-    '<ol class="small muted" style="padding-left:18px;margin:0">' +
-    '<li>Buka pengaturan peramban/situs ini (ikon gembok di bilah alamat).</li>' +
-    '<li>Pilih <b>Kamera → Izinkan</b> (pilih kamera depan bila diminta).</li>' +
-    '<li>Jika memakai iOS: Pengaturan &gt; Safari &gt; Kamera &gt; Izinkan.</li>' +
-    '<li>Kembali lalu tekan Coba Lagi.</li></ol></div>';
-  var foot = $('absen-foot');
-  foot.hidden = false;
-  foot.innerHTML =
-    '<div class="btn-row"><button type="button" class="btn btn-ghost" id="absen-batal">Batal</button>' +
-    '<button type="button" class="btn btn-outline" id="absen-ulang-kamera">Coba Lagi</button></div>';
-  $('absen-batal').addEventListener('click', tutupAlurAbsen);
-  $('absen-ulang-kamera').addEventListener('click', function () { renderLangkahKamera($('absen-body'), foot); });
+    '<div class="card small muted">Buka pengaturan situs (ikon gembok) → <b>Kamera → Izinkan</b>, ' +
+    'lalu tekan Coba Lagi. Di iOS: Pengaturan &gt; Safari &gt; Kamera.</div>' +
+    '<div class="btn-row"><button type="button" class="btn btn-outline btn-sm" id="kamera-batal">Tutup</button>' +
+    '<button type="button" class="btn btn-primary btn-sm" id="kamera-ulang">Coba Lagi</button></div>';
+  $('kamera-batal').addEventListener('click', tutupKamera);
+  $('kamera-ulang').addEventListener('click', function () { bukaKamera(); });
 }
 
 function matikanKamera() {
@@ -765,176 +1098,94 @@ function ambilFoto() {
 
   a.foto = dataUrl;
   a.fotoKb = Math.max(1, Math.round((dataUrl.length - 'data:image/jpeg;base64,'.length) * 3 / 4 / 1024));
+  a.kamera = false;
   matikanKamera();
-
-  var area = $('kamera-area');
-  area.innerHTML =
-    '<div class="kamera-viewport"><img class="mirror" src="' + dataUrl + '" alt="Hasil selfie"></div>' +
-    '<p class="info-foto">Ukuran foto ± ' + a.fotoKb + ' KB. Puas? Lanjut atau ambil ulang.</p>';
-
-  var foot = $('absen-foot');
-  foot.hidden = false;
-  foot.innerHTML =
-    '<div class="btn-row">' +
-    '<button type="button" class="btn btn-outline" id="absen-ulang-foto">Ulangi</button>' +
-    '<button type="button" class="btn btn-primary" id="absen-lanjut-foto">Lanjut</button>' +
-    '</div>';
-  $('absen-ulang-foto').addEventListener('click', function () { renderLangkahKamera(area, foot); });
-  $('absen-lanjut-foto').addEventListener('click', function () {
-    state.absen.langkah = (state.absen.hasil && state.absen.hasil.alasan_wajib && state.absen.jenis === 'masuk') ? 3 : 4;
-    renderLangkahAbsen();
-  });
+  var kotak = $('absen-kamera');
+  if (kotak) { kotak.hidden = true; kotak.innerHTML = ''; }
+  perbaruiAbsen();
 }
 
-/* ---- Langkah 3: alasan keterlambat (wajib jika terlambat) ---- */
+/* ---- Kirim ------------------------------------------------------- */
 
-function renderLangkahAlasan(body, foot) {
-  body.innerHTML =
-    '<p class="langkah-label">Langkah 3 — Alasan keterlambat</p>' +
-    '<div class="banner">⏰ Anda terlambat. Alasan keterlambatan <strong>wajib diisi</strong> ' +
-    '(minimal 5 karakter) sebelum absen bisa dikirim.</div>' +
-    '<label class="field"><span>Alasan keterlambatan</span>' +
-    '<textarea id="alasan-input" maxlength="500" placeholder="contoh: Macet di jalan tol" ' +
-    'aria-describedby="alasan-hint"></textarea>' +
-    '<div class="field-hint" id="alasan-hint"><span id="alasan-hitung">0</span>/500 karakter — minimal 5</div></label>';
-  foot.hidden = false;
-  foot.innerHTML =
-    '<div class="btn-row">' +
-    '<button type="button" class="btn btn-ghost" id="absen-kembali">Kembali</button>' +
-    '<button type="button" class="btn btn-primary" id="absen-lanjut-alasan" disabled>Lanjut</button>' +
-    '</div>';
-  $('absen-kembali').addEventListener('click', function () { state.absen.langkah = 2; renderLangkahAbsen(); });
-  var input = $('alasan-input');
-  var tombol = $('absen-lanjut-alasan');
-  input.value = state.absen.alasan || '';
-  function cek() {
-    $('alasan-hitung').textContent = String(input.value.length);
-    tombol.disabled = input.value.trim().length < 5;
-  }
-  input.addEventListener('input', cek);
-  cek();
-  tombol.addEventListener('click', function () {
-    state.absen.alasan = input.value.trim();
-    state.absen.langkah = 4;
-    renderLangkahAbsen();
-  });
-}
-
-/* ---- Langkah 4: konfirmasi & kirim ---- */
-
-function renderLangkahKonfirmasi(body, foot) {
+function kirimAbsen() {
   var a = state.absen;
-  var h = a.hasil;
-  var kembaliKe = (h && h.alasan_wajib && a.jenis === 'masuk') ? 3 : 2;
-  body.innerHTML =
-    '<p class="langkah-label">Langkah 4 — Konfirmasi</p>' +
-    '<div class="card">' +
-      '<div class="kv"><span>Jenis</span><b>' + (a.jenis === 'masuk' ? 'Absen Masuk' : 'Absen Pulang') + '</b></div>' +
-      '<div class="kv"><span>Tanggal</span><b>' + esc(tglIndonesia(new Date())) + '</b></div>' +
-      '<div class="kv"><span>Jam (server)</span><b>' + esc(jamMenitSekarang()) + '</b></div>' +
-      '<div class="kv"><span>Jarak ke lokasi</span><b>' + (h ? h.jarak_m : '-') + ' m (radius ' + (h ? h.radius_m : '-') + ' m)</b></div>' +
-      '<div class="kv"><span>Akurasi GPS</span><b>' + (a.posisi ? Math.round(a.posisi.akurasi) : '-') + ' m (foto ± ' + a.fotoKb + ' KB)</b></div>' +
-      (a.jenis === 'masuk' ? '<div class="kv"><span>Status</span><b>' + (h && h.terlambat ? 'Terlambat' : 'Hadir') + '</b></div>' : '') +
-      (a.alasan ? '<div class="kv"><span>Alasan terlambat</span><b>' + esc(a.alasan) + '</b></div>' : '') +
-    '</div>' +
-    '<div id="kirim-pesan"></div>' +
-    '<p class="small muted center">Periksa data sebelum dikirim.</p>';
-  foot.hidden = false;
-  foot.innerHTML =
-    '<div class="btn-row">' +
-    '<button type="button" class="btn btn-ghost" id="absen-kembali">Kembali</button>' +
-    '<button type="button" class="btn btn-primary" id="btn-kirim-absen">Kirim Absensi</button>' +
-    '</div>';
-  $('absen-kembali').addEventListener('click', function () { state.absen.langkah = kembaliKe; renderLangkahAbsen(); });
-  $('btn-kirim-absen').addEventListener('click', kirimAbsen);
-}
+  if (!a || a.mengirim || a.sukses) return;
 
-function kirimAbsen(ev) {
-  var a = state.absen;
-  if (!a) return;
-  var btn = ev.currentTarget;
-  if (!a.foto) {
-    $('kirim-pesan').innerHTML = '<div class="banner error">Foto selfie belum diambil. Kembali ke langkah kamera.</div>';
-    return;
+  var pesan = $('absen-pesan');
+  function tolak(teks) {
+    if (pesan) pesan.innerHTML = '<div class="banner error">' + esc(teks) + '</div>';
   }
+
+  if (!a.posisi) { tolak('Lokasi belum terbaca. Tekan Perbarui pada status lokasi.'); return; }
+  if (!a.hasil || !a.hasil.valid) { tolak('Anda belum berada di dalam area absen.'); return; }
+  if (!a.foto) { tolak('Selfie belum diambil. Ketuk lingkaran Selfie untuk membuka kamera.'); return; }
+  if (!alasanCukup(a)) { tolak('Alasan keterlambatan wajib diisi minimal 5 karakter.'); return; }
+
   var payload = {
     lat: a.posisi.lat,
     lng: a.posisi.lng,
     akurasi: a.posisi.akurasi,
     foto_base64: a.foto
   };
-  if (a.jenis === 'masuk') payload.alasan_terlambat = a.alasan || '';
+  if (a.jenis === 'masuk') payload.alasan_terlambat = String(a.alasan || '').trim();
 
-  setBusy(btn, true, 'Mengirim…');
+  a.mengirim = true;
+  a.gagal = null;
+  perbaruiAbsen();
+  var tombol = $('btn-kirim-absen');
+  if (tombol) tombol.disabled = true;
+
   api(a.jenis === 'masuk' ? 'absen_masuk' : 'absen_pulang', payload)
     .then(function (data) {
-      a.kirimSukses = data;
-      a.kirimGagal = null;
-      a.langkah = 5;
-      renderLangkahAbsen();
+      if (!state.absen) return;
+      state.absen.mengirim = false;
+      state.absen.sukses = data;
+      state.absen.foto = null;           // jangan simpan base64 di memori lebih lama
+      tampilSuksesAbsen();
     })
     .catch(function (e) {
+      if (!state.absen) return;
       if (tanganiErrorSesi(e)) return;
-      a.kirimSukses = null;
-      a.kirimGagal = errPesan(e);
-      a.kirimKode = errKode(e);
-      a.langkah = 5;
-      renderLangkahAbsen();
-    })
-    .then(function () { setBusy(btn, false); });
+      state.absen.mengirim = false;
+      state.absen.gagal = errPesan(e);
+      state.absen.gagalKode = errKode(e);
+      perbaruiAbsen();
+    });
 }
 
-/* ---- Langkah 5: hasil sukses atau pesan error ---- */
-
-function renderLangkahHasil(body, foot) {
+function tampilSuksesAbsen() {
   var a = state.absen;
-  if (a.kirimSukses) {
-    var d = a.kirimSukses;
-    body.innerHTML =
-      '<div class="status-hero" style="border-color:#86efac">' +
-        '<div class="status-pill ok" style="font-size:15px">' + ikonSvg('centang-lingkar') + ' ' +
-        (a.jenis === 'masuk' ? 'Absen Masuk Berhasil' : 'Absen Pulang Berhasil') + '</div>' +
-        '<div class="status-baris">' + esc(tglIndonesia(new Date())) + '</div>' +
-      '</div>' +
-      '<div class="card">' +
-        (a.jenis === 'masuk'
-          ? '<div class="kv"><span>Jam masuk</span><b>' + esc(tampilJam(d.jam_masuk) || '') + '</b></div>' +
-            '<div class="kv"><span>Status</span><b>' + esc(d.status || '') + '</b></div>' +
-            (d.alasan_terlambat ? '<div class="kv"><span>Alasan</span><b>' + esc(d.alasan_terlambat) + '</b></div>' : '')
-          : '<div class="kv"><span>Jam pulang</span><b>' + esc(tampilJam(d.jam_pulang) || '') + '</b></div>') +
-        '<div class="kv"><span>Jarak tercatat</span><b>' + esc(d.jarak_m) + ' m</b></div>' +
-        '<div class="kv"><span>Foto</span><b>Tersimpan di Drive ' + ikonSvg('centang-lingkar') + '</b></div>' +
-      '</div>';
-    foot.hidden = false;
-    foot.innerHTML = '<button type="button" class="btn btn-primary btn-block" id="absen-selesai">Selesai</button>';
-    $('absen-selesai').addEventListener('click', function () {
-      tutupAlurAbsen();
-      bukaScreen('beranda');
-    });
-    return;
-  }
+  if (!a) return;
+  var d = a.sukses || {};
+  matikanKamera();
+  hancurkanPeta();
+  if (absenJamTimer) { clearInterval(absenJamTimer); absenJamTimer = null; }
 
-  // gagal — tampilkan pesan error, tanpa data setengah jadi
-  body.innerHTML =
-    '<div class="banner error"><strong>' + ikonSvg('silang-lingkar') + ' Absen ' + (a.jenis === 'masuk' ? 'masuk' : 'pulang') + ' gagal.</strong><br>' +
-    esc(a.kirimGagal || 'Terjadi kesalahan.') + '</div>' +
-    (a.kirimKode === 'DI_LUAR_RADIUS' || a.kirimKode === 'AKURASI_BURUK'
-      ? '<div class="card small muted">Pindah lebih dekat ke lokasi kerja / ke tempat terbuka agar GPS akurat, ' +
-        'lalu ulangi absen dari langkah lokasi dan selfie baru.</div>'
-      : '<div class="card small muted">Tidak ada data absensi yang tersimpan. Anda bisa mengulang absen dari awal.</div>');
-  foot.hidden = false;
-  foot.innerHTML =
-    '<div class="btn-row">' +
-    '<button type="button" class="btn btn-ghost" id="absen-tutup">Tutup</button>' +
-    '<button type="button" class="btn btn-primary" id="absen-ulang">Coba Lagi</button>' +
+  var rincian = a.jenis === 'masuk'
+    ? '<div class="kv"><span>Jam masuk</span><b>' + esc(tampilJam(d.jam_masuk) || '') + '</b></div>' +
+      '<div class="kv"><span>Status</span><b>' + esc(d.status || '') + '</b></div>' +
+      (d.alasan_terlambat ? '<div class="kv"><span>Alasan</span><b>' + esc(d.alasan_terlambat) + '</b></div>' : '')
+    : '<div class="kv"><span>Jam pulang</span><b>' + esc(tampilJam(d.jam_pulang) || '') + '</b></div>';
+
+  $('absen-body').innerHTML =
+    '<div class="absen-sukses">' +
+      '<span class="absen-sukses-ikon" aria-hidden="true">' + ikonSvg('centang-lingkar') + '</span>' +
+      '<h3>Absen ' + (a.jenis === 'masuk' ? 'masuk' : 'pulang') + ' tercatat</h3>' +
+      '<p class="small muted">' + esc(tglIndonesia(new Date())) + '</p>' +
+    '</div>' +
+    '<div class="card">' + rincian +
+      '<div class="kv"><span>Jarak tercatat</span><b>' + esc(labelJarak(d.jarak_m)) + '</b></div>' +
+      '<div class="kv"><span>Foto</span><b>Tersimpan di Drive</b></div>' +
     '</div>';
-  $('absen-tutup').addEventListener('click', tutupAlurAbsen);
-  $('absen-ulang').addEventListener('click', function () {
-    state.absen = { jenis: a.jenis, langkah: 1, hasil: null, posisi: null, foto: null, fotoKb: 0, alasan: '' };
-    renderLangkahAbsen();
+
+  var foot = $('absen-foot');
+  foot.hidden = false;
+  foot.innerHTML = '<button type="button" class="btn btn-primary btn-block" id="absen-selesai">Selesai</button>';
+  $('absen-selesai').addEventListener('click', function () {
+    tutupAlurAbsen();
+    bukaScreen('beranda');
   });
 }
-
 /* ================================================================ */
 /* SCREEN: Izin (karyawan & admin) — F5                               */
 /* ================================================================ */
@@ -1015,7 +1266,7 @@ function muatDaftarIzin() {
   var kotak = $('izin-daftar');
   if (!kotak) return;
   kotak.innerHTML = loadingHTML('Memuat daftar izin…');
-  api('izin_saya', {})
+  apiLayar('izin_saya', {})
     .then(function (data) {
       var daftar = (data && data.daftar) || [];
       if (!daftar.length) {
@@ -1076,7 +1327,7 @@ function muatRiwayat() {
   var kotak = $('riw-hasil');
   var bulan = $('riw-bulan').value || bulanIni();
   kotak.innerHTML = loadingHTML('Memuat riwayat…');
-  api('riwayat_saya', { bulan: bulan })
+  apiLayar('riwayat_saya', { bulan: bulan })
     .then(function (data) {
       var absen = (data && data.absensi) || [];
       var izin = (data && data.izin) || [];
@@ -1218,7 +1469,7 @@ SCREENS.dashboard = {
   title: 'Dashboard',
   render: function (el) {
     el.innerHTML = loadingHTML('Memuat dashboard hari ini…');
-    api('dashboard_hari_ini', {})
+    apiLayar('dashboard_hari_ini', {})
       .then(function (d) {
         var j = d.jumlah;
         var html =
@@ -1278,7 +1529,7 @@ SCREENS.absensi = {
     $('btn-abs-tampil').addEventListener('click', muatAbsensi);
 
     // isi dropdown karyawan
-    api('karyawan_list', {})
+    apiLayar('karyawan_list', {})
       .then(function (data) {
         absensiState.pilihanKaryawan = data.daftar || [];
         var sel = $('abs-karyawan');
@@ -1303,7 +1554,7 @@ function muatAbsensi() {
   var payload = { tanggal_mulai: dari, tanggal_selesai: sampai };
   if (kid) payload.id_karyawan = kid;
 
-  api('absensi_list', payload)
+  apiLayar('absensi_list', payload)
     .then(function (data) {
       absensiState.daftar = data.daftar || [];
       renderAbsensi(kotak);
@@ -1426,7 +1677,7 @@ function muatPersetujuan() {
   var status = $('izn-filter').value;
   kotak.innerHTML = loadingHTML('Memuat izin…');
   var payload = status ? { status: status } : {};
-  api('izin_list', payload)
+  apiLayar('izin_list', payload)
     .then(function (data) {
       var daftar = data.daftar || [];
       if (!daftar.length) {
@@ -1508,7 +1759,7 @@ function muatKaryawan() {
   var kotak = $('kar-hasil');
   if (!kotak) return;
   kotak.innerHTML = loadingHTML('Memuat daftar karyawan…');
-  Promise.all([api('karyawan_list', {}), api('lokasi_list', {})])
+  Promise.all([apiLayar('karyawan_list', {}), apiLayar('lokasi_list', {})])
     .then(function (hasil) {
       dataKaryawan = hasil[0].daftar || [];
       dataLokasiUntukForm = (hasil[1].daftar || []).filter(function (l) { return l.status_aktif; });
@@ -1655,7 +1906,7 @@ function muatLokasi() {
   var kotak = $('lok-hasil');
   if (!kotak) return;
   kotak.innerHTML = loadingHTML('Memuat lokasi…');
-  api('lokasi_list', {})
+  apiLayar('lokasi_list', {})
     .then(function (data) {
       var daftar = data.daftar || [];
       if (!daftar.length) {
@@ -1774,8 +2025,7 @@ var WajibUI = ['jam_masuk', 'jam_pulang', 'toleransi_menit', 'hari_kerja', 'radi
 SCREENS.pengaturan = {
   title: 'Pengaturan',
   render: function (el) {
-    el.innerHTML = loadingHTML('Memuat pengaturan…');
-    Promise.all([api('pengaturan_get', {}), api('libur_list', {})])
+    el.innerHTML = loadingHTML('Memuat pengaturan…');  Promise.all([apiLayar('pengaturan_get', {}), apiLayar('libur_list', {})])
       .then(function (hasil) {
         gambarPengaturan(el, hasil[0].pengaturan || {}, hasil[1].daftar || []);
       })
@@ -1899,7 +2149,7 @@ function muatRekap() {
   btnCsv.disabled = true;
   rekapTerakhir = null;
   kotak.innerHTML = loadingHTML('Memuat rekap bulanan…');
-  api('rekap_bulanan', { bulan: bulan })
+  apiLayar('rekap_bulanan', { bulan: bulan })
     .then(function (data) {
       rekapTerakhir = data;
       var daftar = data.daftar || [];
@@ -1982,7 +2232,7 @@ function muatLog() {
   var kotak = $('log-hasil');
   if (!kotak) return;
   kotak.innerHTML = loadingHTML('Memuat log…');
-  api('log_list', { tanggal_mulai: $('log-dari').value, tanggal_selesai: $('log-sampai').value })
+  apiLayar('log_list', { tanggal_mulai: $('log-dari').value, tanggal_selesai: $('log-sampai').value })
     .then(function (data) {
       var daftar = data.daftar || [];
       if (!daftar.length) {
