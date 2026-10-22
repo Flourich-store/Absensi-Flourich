@@ -987,28 +987,23 @@ function muatLokasiAbsen() {
 
 var UKURAN_SISI_FOTO = 640;   // sesuai default foto_lebar_maks_px (bagian 7)
 var KUALITAS_FOTO = 0.7;      // sesuai default foto_kualitas
-
-function bukaKamera() {
+var facingModeAktif = 'user'; // 'user' = depan (selfie), 'environment' = belakangfunction bukaKamera() {
   var a = state.absen;
   if (!a) return;
   a.kamera = true;
   var kotak = $('absen-kamera');
   if (!kotak) return;
   kotak.hidden = false;
-  kotak.innerHTML =
-    '<div class="absen-kamera-tampil" id="absen-kamera-tampil">' +
-      '<video id="kam-video" class="mirror" autoplay playsinline muted></video>' +
-      '<div class="kamera-grid" aria-hidden="true"></div>' +
-    '</div>' +
-    '<div class="absen-kamera-aksi">' +
-      '<button type="button" class="btn btn-ghost btn-sm" id="kamera-batal">Tutup kamera</button>' +
-      '<button type="button" class="btn btn-primary btn-sm" id="btn-ambil-foto" disabled>' +
-        ikonSvg('kamera') + ' Ambil</button>' +
-    '</div>';
+  kotak.innerHTML =    '<div class="absen-kamera-tampil" id="absen-kamera-tampil">' +      '<video id="kam-video" class="mirror" autoplay playsinline muted></video>' +      '<div class="kamera-grid" aria-hidden="true"></div>' +    '</div>' +    '<div class="absen-kamera-aksi">' +      '<button type="button" class="btn btn-ghost btn-sm" id="kamera-batal">Tutup kamera</button>' +      '<div class="kamera-mode-toggle" style="position:absolute; right:8px; top:8px; background:rgba(0,0,0,.5); padding:4px 8px; border-radius:4px; font-size:11px; color:var(--abu-teks);">Mode: <span id="kamera-mode-depan">Depan</span>/<span id="kamera-mode-belakang" style="display:none">Belakang</span></div>' +      '<button type="button" class="btn btn-primary btn-sm" id="btn-ambil-foto" disabled>' +        ikonSvg('kamera') + ' Ambil</button>' +    '</div>';
   $('kamera-batal').addEventListener('click', tutupKamera);
   $('btn-ambil-foto').addEventListener('click', ambilFoto);
+  // Add mode toggle listeners
+  $('kamera-mode-depan').addEventListener('click', function() { facingModeAktif = 'user'; mulaiKamera(); });
+  $('kamera-mode-belakang').addEventListener('click', function() { facingModeAktif = 'environment'; mulaiKamera(); });
   mulaiKamera();
 }
+
+
 
 function tutupKamera() {
   matikanKamera();
@@ -1027,31 +1022,35 @@ function mulaiKamera() {
     galatKamera('Perangkat/peramban tidak mendukung kamera. Absen tidak bisa dilanjutkan.');
     return;
   }
+  var facingMode = facingModeAktif === 'user' ? 'user' : 'environment';
   navigator.mediaDevices.getUserMedia({
-    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 1280 } },
+    video: { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 1280 } },
     audio: false
   }).then(function (stream) {
-    if (!state.absen || !$('absen-kamera-tampil')) { // layar sudah berubah
-      stream.getTracks().forEach(function (t) { t.stop(); });
-      return;
-    }
+    if (!state.absen || !$('absen-kamera-tampil')) { // layar sudah berubah      stream.getTracks().forEach(function (t) { t.stop(); });      return;    }
     state.absen.stream = stream;
     var video = $('kam-video');
     if (video) video.srcObject = stream;
     var tombol = $('btn-ambil-foto');
     if (tombol) tombol.disabled = false;
+    // Update mode display
+    var modeSpanDepan = $('kamera-mode-depan');
+    var modeSpanBelakang = $('kamera-mode-belakang');
+    if (modeSpanDepan) modeSpanDepan.style.display = facingMode === 'user' ? 'inline' : 'none';
+    if (modeSpanBelakang) modeSpanBelakang.style.display = facingMode === 'environment' ? 'inline' : 'none';
   }).catch(function (err) {
     var pesan;
     if (err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) {
       pesan = 'Izin kamera ditolak. Absen tidak bisa dilanjutkan sebelum izin kamera diaktifkan.';
     } else if (err && (err.name === 'NotFoundError' || err.name === 'OverconstrainedError')) {
-      pesan = 'Kamera depan tidak ditemukan di perangkat ini.';
+      pesan = facingMode === 'environment' ? 'Kamera belakang tidak ditemukan di perangkat ini.' : 'Kamera depan tidak ditemukan di perangkat ini.';
     } else {
       pesan = 'Kamera tidak bisa dibuka. (' + (err && err.name ? err.name : 'galat') + ')';
     }
     galatKamera(pesan);
   });
 }
+
 
 function galatKamera(pesan) {
   var kotak = $('absen-kamera');
