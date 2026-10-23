@@ -432,6 +432,56 @@ table.data td.wrap { white-space: normal; min-width: 160px; }
   border-radius: 18px;
   box-shadow: var(--bayang);
 }
+/* Teks "Memuat…" berdenyut halus agar terasa hidup, bukan beku */
+.loading-state p, .splash-sub {
+  animation: berdenyut 1.6s ease-in-out infinite;
+}
+@keyframes berdenyut {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .45; }
+}
+
+/* Spinner dua cincin berlawanan arah — terasa lebih modern & responsif */
+.spinner {
+  position: relative;
+  width: 32px; height: 32px;
+  margin: 0 auto 10px;
+  border: 3px solid var(--garis);
+  border-top-color: var(--hijau);
+  border-radius: 50%;
+  animation: putar .8s linear infinite;
+}
+.spinner::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  border: 2.5px solid transparent;
+  border-bottom-color: var(--hijau-muda);
+}
+@keyframes putar { to { transform: rotate(360deg); } }
+
+/* Spinner mini di dalam tombol saat memproses (kirim/cek/simpan) */
+.btn-spinner {
+  display: inline-block;
+  width: 14px; height: 14px;
+  margin-right: 7px;
+  vertical-align: -2px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .4);
+  border-top-color: #fff;
+  animation: putar .7s linear infinite;
+}
+.btn-ghost .btn-spinner, .btn-outline .btn-spinner {
+  border-color: rgba(27, 122, 67, .25);
+  border-top-color: var(--hijau);
+}
+.btn[aria-busy="true"] { cursor: progress; opacity: .88; }
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-state p, .splash-sub { animation: none; }
+  .spinner, .spinner::after, .btn-spinner { animation-duration: 2.5s; }
+}
 .state-ico {
   width: 56px; height: 56px;
   border-radius: 50%;
@@ -444,15 +494,6 @@ table.data td.wrap { white-space: normal; min-width: 160px; }
 }
 .state-ico svg { width: 26px; height: 26px; display: block; }
 .error-state .state-ico { background: var(--merah-bg); color: var(--merah); }
-.spinner {
-  width: 30px; height: 30px;
-  margin: 0 auto 8px;
-  border: 3px solid var(--garis);
-  border-top-color: var(--hijau);
-  border-radius: 50%;
-  animation: putar .8s linear infinite;
-}
-@keyframes putar { to { transform: rotate(360deg); } }
 
 /* -------------------------------------------------- Overlay & modal */
 .overlay {
@@ -687,6 +728,32 @@ table.data td.wrap { white-space: normal; min-width: 160px; }
   background:
     radial-gradient(circle at 50% 42%, transparent 30%, rgba(0,0,0,.32) 31%);
   pointer-events: none;
+}
+/* Toggle kamera Depan/Belakang — menempel di pojok pratinjau, selalu tampil */
+.kamera-mode-toggle {
+  position: absolute; top: 10px; right: 10px; z-index: 5;
+  display: flex; align-items: center; gap: 2px;
+  padding: 3px 4px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, .58);
+  color: #fff;
+  font-size: 11px; font-weight: 700; line-height: 1.4;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.mode-opsi {
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, .6);
+  font: inherit;
+  font-size: 11px; font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.mode-opsi.mode-aktif {
+  background: rgba(255, 255, 255, .25);
+  color: #fff;
 }
 
 .jarak-besar { font-size: 17px; font-weight: 700; }
