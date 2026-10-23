@@ -5,7 +5,7 @@
  * "mode offline" di luar cakupan (bagian 5 PRD).
  */
 
-var CACHE = 'absensi-shell-v14'; // Tahap 14: peta gratis (Leaflet/CARTO) saja, kamera, cache menu
+var CACHE = 'absensi-shell-v15'; // Tahap 15: fallback ubin peta (CARTO -> OSM)
 var SHELL = [
   './',
   './index.html',

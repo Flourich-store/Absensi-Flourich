@@ -614,8 +614,12 @@ var PETA_MIN_ZOOM = 3;
  * Dipilih karena tampilannya paling dekat dengan Google Maps tanpa perlu
  * kunci API/billing (ubin Google Maps tidak boleh dipakai langsung oleh
  * aplikasi pihak ketiga). Ubin tetap butuh jaringan; Leaflet-nya lokal.
+ *
+ * Cadangan: bila CDN CARTO lambat/gagal (umum di jaringan Indonesia),
+ * otomatis pindah ke ubin OpenStreetMap agar peta tetap tampil.
  */
 var PETA_TILE = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+var PETA_TILE_CADANGAN = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 var PETA_ATRIBUSI = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 var PETA_BIRU = '#1a73e8';      // biru titik posisi pengguna, seperti Google Maps
 var petaAbsen = null;   // { peta: L.Map, lapisan: L.LayerGroup }
@@ -714,12 +718,40 @@ function gambarPeta(posisi, lokasi, hasil) {
     // Tombol +/− di kanan bawah dan atribusi di kiri bawah, seperti Google Maps.
     L.control.zoom({ position: 'bottomright' }).addTo(p);
     if (p.attributionControl) p.attributionControl.setPosition('bottomleft');
-    L.tileLayer(PETA_TILE, {
+
+    // Ubin utama (CARTO Voyager) + cadangan (OpenStreetMap).
+    // Bila ≥4 ubin CARTO gagal dimuat dalam 6 detik, pindah ke OSM agar
+    // peta tidak pernah kosong — CDN CARTO kadang lambat di jaringan Indonesia.
+    var ubinUtama = L.tileLayer(PETA_TILE, {
       maxZoom: 20,
       subdomains: 'abcd',
       detectRetina: true,
       attribution: PETA_ATRIBUSI
-    }).addTo(p);
+    });
+    var ubinCadangan = L.tileLayer(PETA_TILE_CADANGAN, {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    });
+    var galatUbin = 0;
+    var sudahCadangan = false;
+    ubinUtama.on('tileerror', function () {
+      galatUbin++;
+      if (galatUbin >= 4 && !sudahCadangan) {
+        sudahCadangan = true;
+        try { p.removeLayer(ubinUtama); } catch (e) {}
+        ubinCadangan.addTo(p);
+      }
+    });
+    ubinUtama.addTo(p);
+    // Jika dalam 6 detik belum ada ubin sama sekali yang berhasil, pakai cadangan.
+    setTimeout(function () {
+      if (!sudahCadangan && galatUbin > 0) {
+        sudahCadangan = true;
+        try { p.removeLayer(ubinUtama); } catch (e) {}
+        ubinCadangan.addTo(p);
+      }
+    }, 6000);
+
     petaAbsen = { peta: p, lapisan: L.layerGroup().addTo(p) };
   }
 
