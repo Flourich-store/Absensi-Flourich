@@ -3,6 +3,10 @@
  *
  * KUNCI GOOGLE MAPS
  * -----------------
+ * KEPUTUSAN PROYEK: kunci ini SENGAJA dikosongkan. Peta absen memakai peta
+ * gratis Leaflet + CARTO Voyager yang tampilannya sudah menyerupai Google
+ * Maps, tanpa tagihan dan tanpa kartu. Mengisinya hanya perlu bila suatu saat
+ * ingin data peta Google (nama jalan/gang Indonesia lebih lengkap).
  * Isi GOOGLE_MAPS_API_KEY dengan kunci "Maps JavaScript API" milik Anda.
  * Kunci ini memang terlihat oleh browser (semua kunci peta begitu), jadi
  * WAJIB dibatasi di Google Cloud Console:
