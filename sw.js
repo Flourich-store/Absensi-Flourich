@@ -5,7 +5,7 @@
  * "mode offline" di luar cakupan (bagian 5 PRD).
  */
 
-var CACHE = 'absensi-shell-v15'; // Tahap 15: fallback ubin peta (CARTO -> OSM)
+var CACHE = 'absensi-shell-v16'; // Tahap 16: Esri Street Map + toggle Satellite
 var SHELL = [
   './',
   './index.html',

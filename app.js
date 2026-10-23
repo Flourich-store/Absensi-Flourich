@@ -609,21 +609,20 @@ SCREENS.beranda = {
 
 var PETA_MIN_ZOOM = 3;
 /*
- * Ubin peta: gaya CARTO Voyager — palet pastel, jalan putih, blok bangunan
- * abu muda, dan air biru muda, yaitu gaya kartografi yang dipakai Google Maps.
- * Dipilih karena tampilannya paling dekat dengan Google Maps tanpa perlu
- * kunci API/billing (ubin Google Maps tidak boleh dipakai langsung oleh
- * aplikasi pihak ketiga). Ubin tetap butuh jaringan; Leaflet-nya lokal.
- *
- * Cadangan: bila CDN CARTO lambat/gagal (umum di jaringan Indonesia),
- * otomatis pindah ke ubin OpenStreetMap agar peta tetap tampil.
+ * Ubin peta: Esri World Street Map — gaya peta berwarna ala Google Maps:
+ * jalan kuning/oranye, taman hijau, air biru, blok bangunan abu-abu.
+ * Gratis tanpa kunci API (esri.com). Cadangan: CARTO Voyager lalu OSM.
+ * Ada tombol toggle Peta/Satellite di pojok kiri atas peta.
  */
-var PETA_TILE = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-var PETA_TILE_CADANGAN = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-var PETA_ATRIBUSI = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+var PETA_TILE = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+var PETA_TILE_SATELLIT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+var PETA_TILE_CADANGAN = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+var PETA_TILE_CADANGAN2 = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+var PETA_ATRIBUSI = '&copy; <a href="https://www.esri.com/">Esri</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 var PETA_BIRU = '#1a73e8';      // biru titik posisi pengguna, seperti Google Maps
 var petaAbsen = null;   // { peta: L.Map, lapisan: L.LayerGroup }
 var absenJamTimer = null;
+var petaModeSatelit = false;   // false = peta jalan, true = citra satelit
 
 function petaSiap() {
   return typeof L !== 'undefined' && L && typeof L.map === 'function';
@@ -719,38 +718,79 @@ function gambarPeta(posisi, lokasi, hasil) {
     L.control.zoom({ position: 'bottomright' }).addTo(p);
     if (p.attributionControl) p.attributionControl.setPosition('bottomleft');
 
-    // Ubin utama (CARTO Voyager) + cadangan (OpenStreetMap).
-    // Bila ≥4 ubin CARTO gagal dimuat dalam 6 detik, pindah ke OSM agar
-    // peta tidak pernah kosong — CDN CARTO kadang lambat di jaringan Indonesia.
-    var ubinUtama = L.tileLayer(PETA_TILE, {
-      maxZoom: 20,
-      subdomains: 'abcd',
-      detectRetina: true,
-      attribution: PETA_ATRIBUSI
-    });
-    var ubinCadangan = L.tileLayer(PETA_TILE_CADANGAN, {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-    });
-    var galatUbin = 0;
-    var sudahCadangan = false;
-    ubinUtama.on('tileerror', function () {
-      galatUbin++;
-      if (galatUbin >= 4 && !sudahCadangan) {
-        sudahCadangan = true;
-        try { p.removeLayer(ubinUtama); } catch (e) {}
-        ubinCadangan.addTo(p);
+    // ---- Ubin peta: Esri Street Map (utama) + CARTO + OSM (cadangan) ----
+    // Bila ≥4 ubin utama gagal, otomatis pindah ke cadangan berikutnya
+    // agar peta tidak pernah kosong.
+    var daftarUbin = [
+      { url: PETA_TILE, opt: { maxZoom: 19, attribution: PETA_ATRIBUSI } },
+      { url: PETA_TILE_CADANGAN, opt: { maxZoom: 19, subdomains: 'abcd', detectRetina: true,
+          attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' } },
+      { url: PETA_TILE_CADANGAN2, opt: { maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' } }
+    ];
+    var idxUbin = 0;
+    var ubinAktif = null;
+
+    function pasangUbin(i) {
+      if (i >= daftarUbin.length) return;
+      if (ubinAktif) { try { p.removeLayer(ubinAktif); } catch (e) {} }
+      idxUbin = i;
+      var u = daftarUbin[i];
+      ubinAktif = L.tileLayer(u.url, u.opt);
+      var galat = 0;
+      var pindah = false;
+      ubinAktif.on('tileerror', function () {
+        galat++;
+        if (galat >= 4 && !pindah) { pindah = true; pasangUbin(i + 1); }
+      });
+      ubinAktif.addTo(p);
+    }
+
+    // Mode peta jalan vs satelit — disimpan di petaAbsen agar bisa diganti
+    function buatUbinMode(satelit) {
+      if (satelit) {
+        return L.tileLayer(PETA_TILE_SATELLIT, { maxZoom: 19, attribution: PETA_ATRIBUSI });
       }
-    });
-    ubinUtama.addTo(p);
-    // Jika dalam 6 detik belum ada ubin sama sekali yang berhasil, pakai cadangan.
-    setTimeout(function () {
-      if (!sudahCadangan && galatUbin > 0) {
-        sudahCadangan = true;
-        try { p.removeLayer(ubinUtama); } catch (e) {}
-        ubinCadangan.addTo(p);
-      }
-    }, 6000);
+      pasangUbin(0);
+      return null;
+    }
+
+    var ubinSatelit = petaModeSatelit ? L.tileLayer(PETA_TILE_SATELLIT, { maxZoom: 19, attribution: PETA_ATRIBUSI }) : null;
+    if (ubinSatelit) ubinSatelit.addTo(p); else pasangUbin(0);
+
+    // Tombol toggle Peta / Satellite di pojok kiri atas (seperti Google Maps)
+    var toggle = L.control({ position: 'topleft' });
+    toggle.onAdd = function () {
+      var div = L.DomUtil.create('div', 'leaflet-bar peta-toggle');
+      div.innerHTML =
+        '<a href="#" id="peta-toggle-jalan" title="Peta jalan"' +
+          (petaModeSatelit ? '' : ' class="aktif"') + '>🗺️ Peta</a>' +
+        '<a href="#" id="peta-toggle-satelit" title="Citra satelit"' +
+          (petaModeSatelit ? ' class="aktif"' : '') + '>🛰️ Satelit</a>';
+      L.DomEvent.disableClickPropagation(div);
+      L.DomEvent.on(div.querySelector('#peta-toggle-jalan'), 'click', function (ev) {
+        ev.preventDefault(); ev.stopPropagation();
+        if (!petaModeSatelit) return;
+        petaModeSatelit = false;
+        if (ubinSatelit) { try { p.removeLayer(ubinSatelit); } catch (e) {} ubinSatelit = null; }
+        pasangUbin(0);
+        div.querySelector('#peta-toggle-jalan').className = 'aktif';
+        div.querySelector('#peta-toggle-satelit').className = '';
+      });
+      L.DomEvent.on(div.querySelector('#peta-toggle-satelit'), 'click', function (ev) {
+        ev.preventDefault(); ev.stopPropagation();
+        if (petaModeSatelit) return;
+        petaModeSatelit = true;
+        // lepas ubin jalan + reset cadangan
+        if (ubinAktif) { try { p.removeLayer(ubinAktif); } catch (e) {} ubinAktif = null; }
+        ubinSatelit = L.tileLayer(PETA_TILE_SATELLIT, { maxZoom: 19, attribution: PETA_ATRIBUSI });
+        ubinSatelit.addTo(p);
+        div.querySelector('#peta-toggle-jalan').className = '';
+        div.querySelector('#peta-toggle-satelit').className = 'aktif';
+      });
+      return div;
+    };
+    toggle.addTo(p);
 
     petaAbsen = { peta: p, lapisan: L.layerGroup().addTo(p) };
   }
