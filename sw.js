@@ -5,7 +5,7 @@
  * "mode offline" di luar cakupan (bagian 5 PRD).
  */
 
-var CACHE = 'absensi-shell-v11'; // Tahap 11: perbaikan boot/login + animasi memuat
+var CACHE = 'absensi-shell-v12'; // Tahap 12: kamera belakang, peta gaya Google Maps, cache menu
 var SHELL = [
   './',
   './index.html',

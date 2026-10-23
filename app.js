@@ -95,6 +95,96 @@ function apiLayar(action, data) {
   });
 }
 
+/**
+ * Muat satu panel layar dengan memanfaatkan cache baca (API_CACHE_MS di
+ * api.js).
+ *
+ * Data yang masih segar langsung digambar tanpa spinner — inilah yang membuat
+ * berpindah menu terasa seketika: panel tidak pernah "kosong lalu menunggu
+ * jaringan" bila isinya sudah ada di memori. Bila belum ada, panel menampilkan
+ * status memuat lalu meminta ke server seperti biasa.
+ *
+ * @param {string} action action baca (harus terdaftar di API_CACHE_MS)
+ * @param {object} payload payload permintaan
+ * @param {HTMLElement} kotak kontainer panel (null = tanpa status memuat)
+ * @param {string} pesan teks status memuat
+ * @param {function} gambar menerima data, lalu mengisi kotak
+ * @returns {Promise} selesai setelah panel digambar
+ */
+function muatPanel(action, payload, kotak, pesan, gambar) {
+  var tersimpan = apiTersimpan(action, payload || {});
+  if (tersimpan) {
+    gambar(tersimpan);
+    return Promise.resolve(tersimpan);
+  }
+  if (kotak) kotak.innerHTML = loadingHTML(pesan);
+  return apiLayar(action, payload || {}).then(function (data) {
+    gambar(data);
+    return data;
+  });
+}
+
+/* ---- Pemanasan cache: menu berikutnya sudah berisi saat diketuk -------- */
+/*
+ * Setelah sebuah layar tampil, data menu lain diminta di latar belakang supaya
+ * saat tab-nya diketuk isinya sudah ada di cache dan langsung tampil tanpa
+ * spinner. Hanya action baca (terdaftar di API_CACHE_MS) yang ikut di sini —
+ * aksi pengubah data tidak pernah dipanggil otomatis.
+ */
+var pemanasanJalan = false;
+var pemanasanTimer = null;
+
+function daftarPemanasan() {
+  var d = new Date();
+  var hari = d.getFullYear() + '-' + jam2(d.getMonth() + 1) + '-' + jam2(d.getDate());
+  var daftar = [{ action: 'status_hari_ini', data: {} }];
+  if (state.user && state.user.role === 'admin') {
+    var d7 = new Date(d.getTime() - 6 * 86400000);
+    var dari7 = d7.getFullYear() + '-' + jam2(d7.getMonth() + 1) + '-' + jam2(d7.getDate());
+    daftar.push({ action: 'dashboard_hari_ini', data: {} });
+    daftar.push({ action: 'karyawan_list', data: {} });
+    daftar.push({ action: 'lokasi_list', data: {} });
+    daftar.push({ action: 'absensi_list', data: { tanggal_mulai: hari, tanggal_selesai: hari } });
+    daftar.push({ action: 'izin_list', data: { status: 'Menunggu' } });
+    daftar.push({ action: 'pengaturan_get', data: {} });
+    daftar.push({ action: 'libur_list', data: {} });
+    daftar.push({ action: 'rekap_bulanan', data: { bulan: bulanIni() } });
+    daftar.push({ action: 'log_list', data: { tanggal_mulai: dari7, tanggal_selesai: hari } });
+  } else {
+    daftar.push({ action: 'izin_saya', data: {} });
+    daftar.push({ action: 'riwayat_saya', data: { bulan: bulanIni() } });
+  }
+  return daftar;
+}
+
+function panaskanCache() {
+  if (pemanasanJalan || !state.user) return;
+  var antre = daftarPemanasan().filter(function (a) {
+    return !apiTersimpan(a.action, a.data);
+  });
+  if (!antre.length) return;
+  pemanasanJalan = true;
+  (function lanjut(i) {
+    if (i >= antre.length) { pemanasanJalan = false; return; }
+    var a = antre[i];
+    var berikut = function () { setTimeout(function () { lanjut(i + 1); }, 200); };
+    api(a.action, a.data).then(berikut, function (e) {
+      // sesi mati: hentikan pemanasan, layar aktif yang akan mengurus login
+      if (errKode(e) === 'TOKEN_INVALID' || errKode(e) === 'AKUN_NONAKTIF') { pemanasanJalan = false; return; }
+      berikut();
+    });
+  })(0);
+}
+
+/** Jadwalkan pemanasan cache sekali; pemanggilan beruntun tidak menumpuk. */
+function jadwalkanPemanasan() {
+  if (pemanasanTimer) clearTimeout(pemanasanTimer);
+  pemanasanTimer = setTimeout(function () {
+    pemanasanTimer = null;
+    panaskanCache();
+  }, 500);
+}
+
 function $(id) { return document.getElementById(id); }
 
 function esc(v) {
@@ -377,6 +467,7 @@ function bukaScreen(id) {
   el.scrollTop = 0;
   window.scrollTo(0, 0);
   s.render(el);
+  jadwalkanPemanasan();   // siapkan data menu lain agar pindah tab tanpa jeda
 }
 
 function masukAplikasi() {
@@ -479,8 +570,7 @@ function berandaHTML(h, user) {
 SCREENS.beranda = {
   title: 'Beranda',
   render: function (el) {
-    apiLayar('status_hari_ini', {})
-      .then(function (h) {
+    muatPanel('status_hari_ini', {}, el, 'Memuat beranda…', function (h) {
         state.hariIni = h;
         state.user.wajib_ganti_pin = h.wajib_ganti_pin;
         el.innerHTML = berandaHTML(h, state.user);
@@ -518,7 +608,16 @@ SCREENS.beranda = {
 /* ================================================================ */
 
 var PETA_MIN_ZOOM = 3;
-var PETA_TILE = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+/*
+ * Ubin peta: gaya CARTO Voyager — palet pastel, jalan putih, blok bangunan
+ * abu muda, dan air biru muda, yaitu gaya kartografi yang dipakai Google Maps.
+ * Dipilih karena tampilannya paling dekat dengan Google Maps tanpa perlu
+ * kunci API/billing (ubin Google Maps tidak boleh dipakai langsung oleh
+ * aplikasi pihak ketiga). Ubin tetap butuh jaringan; Leaflet-nya lokal.
+ */
+var PETA_TILE = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+var PETA_ATRIBUSI = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+var PETA_BIRU = '#1a73e8';      // biru titik posisi pengguna, seperti Google Maps
 var petaAbsen = null;   // { peta: L.Map, lapisan: L.LayerGroup }
 var absenJamTimer = null;
 
@@ -548,12 +647,28 @@ function labelJarak(m) {
   return (n / 1000).toFixed(1).replace('.', ',') + ' km';
 }
 
+/**
+ * Penanda peta bergaya Google Maps:
+ *  - 'kantor' -> pin tetes air (teardrop) berwarna, ujungnya menunjuk koordinat
+ *  - 'saya'   -> titik biru dengan cincin putih + halo lembut
+ */
 function titikPeta(warna, jenis) {
+  if (jenis === 'kantor') {
+    return L.divIcon({
+      className: 'peta-marker peta-marker-pin',
+      html: '<svg class="peta-pin" viewBox="0 0 24 36" aria-hidden="true">' +
+        '<path d="M12 0C5.37 0 0 5.37 0 12c0 8.4 12 24 12 24s12-15.6 12-24C24 5.37 18.63 0 12 0z" fill="' + warna + '"/>' +
+        '<circle cx="12" cy="12" r="4.6" fill="#fff"/></svg>',
+      iconSize: [26, 39],
+      iconAnchor: [13, 38]
+    });
+  }
   return L.divIcon({
     className: 'peta-marker',
-    html: '<span class="peta-titik' + (jenis ? ' ' + jenis : '') + '" style="--warna:' + warna + '"></span>',
-    iconSize: [22, 22],
-    iconAnchor: [11, 11]
+    html: '<span class="peta-halo"></span>' +
+      '<span class="peta-titik saya" style="--warna:' + warna + '"></span>',
+    iconSize: [30, 30],
+    iconAnchor: [15, 15]
   });
 }
 
@@ -589,9 +704,14 @@ function gambarPeta(posisi, lokasi, hasil) {
       attributionControl: true,
       minZoom: PETA_MIN_ZOOM
     });
+    // Tombol +/− di kanan bawah dan atribusi di kiri bawah, seperti Google Maps.
+    L.control.zoom({ position: 'bottomright' }).addTo(p);
+    if (p.attributionControl) p.attributionControl.setPosition('bottomleft');
     L.tileLayer(PETA_TILE, {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      maxZoom: 20,
+      subdomains: 'abcd',
+      detectRetina: true,
+      attribution: PETA_ATRIBUSI
     }).addTo(p);
     petaAbsen = { peta: p, lapisan: L.layerGroup().addTo(p) };
   }
@@ -601,8 +721,8 @@ function gambarPeta(posisi, lokasi, hasil) {
 
   // area absen resmi
   L.circle([latLokasi, lngLokasi], {
-    radius: radius, color: warna, weight: 2, opacity: .95,
-    fillColor: warna, fillOpacity: .13, interactive: false
+    radius: radius, color: warna, weight: 2, opacity: .9,
+    fillColor: warna, fillOpacity: .12, interactive: false
   }).addTo(lap);
   L.marker([latLokasi, lngLokasi], {
     icon: titikPeta(warna, 'kantor'), interactive: false, keyboard: false
@@ -625,15 +745,15 @@ function gambarPeta(posisi, lokasi, hasil) {
     if (jarak !== null) lencana.textContent = 'Jarak ' + labelJarak(jarak);
   }
 
-  // posisi pengguna + cincin akurasi GPS
+  // posisi pengguna + lingkaran akurasi GPS (biru Google Maps)
   if (posisi.akurasi > 0) {
     L.circle([posisi.lat, posisi.lng], {
-      radius: Math.min(posisi.akurasi, 5000), color: '#2563eb', weight: 1, opacity: .4,
-      fillColor: '#2563eb', fillOpacity: .1, interactive: false
+      radius: Math.min(posisi.akurasi, 5000), color: PETA_BIRU, weight: 1, opacity: .35,
+      fillColor: PETA_BIRU, fillOpacity: .12, interactive: false
     }).addTo(lap);
   }
   L.marker([posisi.lat, posisi.lng], {
-    icon: titikPeta('#2563eb', 'saya'), interactive: false, keyboard: false
+    icon: titikPeta(PETA_BIRU, 'saya'), interactive: false, keyboard: false
   }).addTo(lap);
 
   // bingkai: pusat + tepi lingkaran + posisi pengguna
@@ -1001,11 +1121,14 @@ function bukaKamera() {
   if (!kotak) return;
   kotak.hidden = false;  kotak.innerHTML =
     '<div class="absen-kamera-tampil" id="absen-kamera-tampil">' +
-      '<video id="kam-video" class="mirror" autoplay playsinline muted></video>' +
+      // Cermin HANYA untuk kamera depan (selfie). Kamera belakang tampil apa
+      // adanya, supaya pratinjau saat memfoto = kenyataan di sekitar Anda.
+      '<video id="kam-video"' + (facingModeAktif === 'user' ? ' class="mirror"' : '') +
+        ' autoplay playsinline muted></video>' +
       '<div class="kamera-grid" aria-hidden="true"></div>' +
       '<div class="kamera-mode-toggle" role="group" aria-label="Pilih kamera">' +
-        '<button type="button" class="mode-opsi" id="kamera-mode-depan">Depan</button>' +
-        '<button type="button" class="mode-opsi" id="kamera-mode-belakang">Belakang</button>' +
+        '<button type="button" class="mode-opsi' + (facingModeAktif === 'user' ? ' mode-aktif' : '') + '" id="kamera-mode-depan">Depan</button>' +
+        '<button type="button" class="mode-opsi' + (facingModeAktif === 'environment' ? ' mode-aktif' : '') + '" id="kamera-mode-belakang">Belakang</button>' +
       '</div>' +
     '</div>' +
     '<div class="absen-kamera-aksi">' +
@@ -1050,7 +1173,12 @@ function mulaiKamera() {
     if (!state.absen || !$('absen-kamera-tampil')) { // layar sudah berubah      stream.getTracks().forEach(function (t) { t.stop(); });      return;    }
     state.absen.stream = stream;
     var video = $('kam-video');
-    if (video) video.srcObject = stream;
+    if (video) {
+      // Cermin hanya untuk kamera depan; kamera belakang tidak dicerminkan.
+      // Kelas dipasang SEBELUM stream tampil agar tidak ada kedipan terbalik.
+      video.classList.toggle('mirror', facingMode === 'user');
+      video.srcObject = stream;
+    }
     var tombol = $('btn-ambil-foto');
     if (tombol) tombol.disabled = false;
     // Tandai mode kamera aktif — kedua opsi tetap tampil agar bisa dipilih
@@ -1105,7 +1233,9 @@ function ambilFoto() {
   canvas.width = Math.round(lebar * skala);
   canvas.height = Math.round(tinggi * skala);
   var ctx = canvas.getContext('2d');
-  // video dimirror utk tampilan; disimpan apa adanya tanpa cermin
+  // Pratinjau kamera depan dicerminkan lewat CSS, tetapi frame yang disimpan
+  // selalu apa adanya (tidak dicerminkan): hasil kamera belakang sama persis
+  // dengan pratinjaunya, dan selfie tersimpan tanpa cermin.
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
   var dataUrl;
   try {
@@ -1284,9 +1414,7 @@ function kirimIzin(ev) {
 function muatDaftarIzin() {
   var kotak = $('izin-daftar');
   if (!kotak) return;
-  kotak.innerHTML = loadingHTML('Memuat daftar izin…');
-  apiLayar('izin_saya', {})
-    .then(function (data) {
+  muatPanel('izin_saya', {}, kotak, 'Memuat daftar izin…', function (data) {
       var daftar = (data && data.daftar) || [];
       if (!daftar.length) {
         kotak.innerHTML = emptyHTML(ikonSvg('kotak-kosong'), 'Belum ada izin yang Anda ajukan.');
@@ -1345,9 +1473,7 @@ SCREENS.riwayat = {
 function muatRiwayat() {
   var kotak = $('riw-hasil');
   var bulan = $('riw-bulan').value || bulanIni();
-  kotak.innerHTML = loadingHTML('Memuat riwayat…');
-  apiLayar('riwayat_saya', { bulan: bulan })
-    .then(function (data) {
+  muatPanel('riwayat_saya', { bulan: bulan }, kotak, 'Memuat riwayat…', function (data) {
       var absen = (data && data.absensi) || [];
       var izin = (data && data.izin) || [];
       var html = '';
@@ -1487,9 +1613,7 @@ function badgeStatusAbsen(status) {
 SCREENS.dashboard = {
   title: 'Dashboard',
   render: function (el) {
-    el.innerHTML = loadingHTML('Memuat dashboard hari ini…');
-    apiLayar('dashboard_hari_ini', {})
-      .then(function (d) {
+    muatPanel('dashboard_hari_ini', {}, el, 'Memuat dashboard hari ini…', function (d) {
         var j = d.jumlah;
         var html =
           '<div class="banner info">' + esc(tglIndonesia(tanggalLokal(d.tanggal))) + ' · pukul ' + esc(d.jam_sekarang) +
@@ -1547,9 +1671,8 @@ SCREENS.absensi = {
       '<div id="abs-hasil">' + loadingHTML('Memuat daftar absensi…') + '</div>';
     $('btn-abs-tampil').addEventListener('click', muatAbsensi);
 
-    // isi dropdown karyawan
-    apiLayar('karyawan_list', {})
-      .then(function (data) {
+    // isi dropdown karyawan (langsung dari cache bila sudah tersedia)
+    muatPanel('karyawan_list', {}, null, '', function (data) {
         absensiState.pilihanKaryawan = data.daftar || [];
         var sel = $('abs-karyawan');
         if (!sel) return;
@@ -1568,16 +1691,13 @@ function muatAbsensi() {
   if (!kotak) return;
   var dari = $('abs-dari').value, sampai = $('abs-sampai').value, kid = $('abs-karyawan').value;
   if (!dari || !sampai) { toast('Isi rentang tanggal terlebih dahulu.', 'err'); return; }
-  kotak.innerHTML = loadingHTML('Memuat daftar absensi…');
-
   var payload = { tanggal_mulai: dari, tanggal_selesai: sampai };
   if (kid) payload.id_karyawan = kid;
 
-  apiLayar('absensi_list', payload)
-    .then(function (data) {
-      absensiState.daftar = data.daftar || [];
-      renderAbsensi(kotak);
-    })
+  muatPanel('absensi_list', payload, kotak, 'Memuat daftar absensi…', function (data) {
+    absensiState.daftar = data.daftar || [];
+    renderAbsensi(kotak);
+  })
     .catch(function (e) {
       if (tanganiErrorSesi(e)) return;
       kotak.innerHTML = errorHTML(errPesan(e));
@@ -1694,10 +1814,8 @@ function muatPersetujuan() {
   var kotak = $('izn-hasil');
   if (!kotak) return;
   var status = $('izn-filter').value;
-  kotak.innerHTML = loadingHTML('Memuat izin…');
   var payload = status ? { status: status } : {};
-  apiLayar('izin_list', payload)
-    .then(function (data) {
+  muatPanel('izin_list', payload, kotak, 'Memuat izin…', function (data) {
       var daftar = data.daftar || [];
       if (!daftar.length) {
         kotak.innerHTML = emptyHTML(ikonSvg('persetujuan'), status === 'Menunggu' ? 'Tidak ada izin yang menunggu persetujuan.' : 'Tidak ada izin dengan filter ini.');
@@ -1777,8 +1895,11 @@ SCREENS.karyawan = {
 function muatKaryawan() {
   var kotak = $('kar-hasil');
   if (!kotak) return;
-  kotak.innerHTML = loadingHTML('Memuat daftar karyawan…');
-  Promise.all([apiLayar('karyawan_list', {}), apiLayar('lokasi_list', {})])
+  var ka = apiTersimpan('karyawan_list', {});
+  var lo = apiTersimpan('lokasi_list', {});
+  var sumber = (ka && lo) ? Promise.resolve([ka, lo]) : null;
+  if (!sumber) kotak.innerHTML = loadingHTML('Memuat daftar karyawan…');
+  (sumber || Promise.all([apiLayar('karyawan_list', {}), apiLayar('lokasi_list', {})]))
     .then(function (hasil) {
       dataKaryawan = hasil[0].daftar || [];
       dataLokasiUntukForm = (hasil[1].daftar || []).filter(function (l) { return l.status_aktif; });
@@ -1924,9 +2045,7 @@ SCREENS.lokasi = {
 function muatLokasi() {
   var kotak = $('lok-hasil');
   if (!kotak) return;
-  kotak.innerHTML = loadingHTML('Memuat lokasi…');
-  apiLayar('lokasi_list', {})
-    .then(function (data) {
+  muatPanel('lokasi_list', {}, kotak, 'Memuat lokasi…', function (data) {
       var daftar = data.daftar || [];
       if (!daftar.length) {
         kotak.innerHTML = emptyHTML(ikonSvg('lokasi'), 'Belum ada lokasi. Tekan Tambah Lokasi lalu isi koordinat (atau Pakai Lokasi Saya).');
@@ -2044,7 +2163,11 @@ var WajibUI = ['jam_masuk', 'jam_pulang', 'toleransi_menit', 'hari_kerja', 'radi
 SCREENS.pengaturan = {
   title: 'Pengaturan',
   render: function (el) {
-    el.innerHTML = loadingHTML('Memuat pengaturan…');  Promise.all([apiLayar('pengaturan_get', {}), apiLayar('libur_list', {})])
+    var pg = apiTersimpan('pengaturan_get', {});
+    var lb = apiTersimpan('libur_list', {});
+    var sumber = (pg && lb) ? Promise.resolve([pg, lb]) : null;
+    if (!sumber) el.innerHTML = loadingHTML('Memuat pengaturan…');
+    (sumber || Promise.all([apiLayar('pengaturan_get', {}), apiLayar('libur_list', {})]))
       .then(function (hasil) {
         gambarPengaturan(el, hasil[0].pengaturan || {}, hasil[1].daftar || []);
       })
@@ -2167,9 +2290,7 @@ function muatRekap() {
   var bulan = $('rek-bulan').value || bulanIni();
   btnCsv.disabled = true;
   rekapTerakhir = null;
-  kotak.innerHTML = loadingHTML('Memuat rekap bulanan…');
-  apiLayar('rekap_bulanan', { bulan: bulan })
-    .then(function (data) {
+  muatPanel('rekap_bulanan', { bulan: bulan }, kotak, 'Memuat rekap bulanan…', function (data) {
       rekapTerakhir = data;
       var daftar = data.daftar || [];
       if (!daftar.length) {
@@ -2250,9 +2371,8 @@ SCREENS.log = {
 function muatLog() {
   var kotak = $('log-hasil');
   if (!kotak) return;
-  kotak.innerHTML = loadingHTML('Memuat log…');
-  apiLayar('log_list', { tanggal_mulai: $('log-dari').value, tanggal_selesai: $('log-sampai').value })
-    .then(function (data) {
+  muatPanel('log_list', { tanggal_mulai: $('log-dari').value, tanggal_selesai: $('log-sampai').value },
+    kotak, 'Memuat log…', function (data) {
       var daftar = data.daftar || [];
       if (!daftar.length) {
         kotak.innerHTML = emptyHTML(ikonSvg('log'), 'Tidak ada aktivitas pada rentang tanggal ini.');
