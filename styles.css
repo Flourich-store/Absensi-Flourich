@@ -610,11 +610,6 @@ table.data td.wrap { white-space: normal; min-width: 160px; }
   box-shadow: 0 1px 2px rgba(60, 64, 67, .3), 0 2px 8px rgba(60, 64, 67, .16);
 }
 .peta .leaflet-container { font: inherit; background: #e8eaed; }
-.peta-muat {
-  position: absolute; inset: 0; display: flex; gap: 8px;
-  align-items: center; justify-content: center;
-  font-size: 13px; color: var(--abu-redup);
-}
 .peta .leaflet-control-attribution {
   font-size: 10px; line-height: 1.7; color: #5f6368;
   background: rgba(255, 255, 255, .82); border-radius: 0; padding: 0 4px; margin: 0;

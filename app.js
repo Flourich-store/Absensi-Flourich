@@ -636,12 +636,6 @@ function hancurkanPeta() {
     try { petaAbsen.peta.remove(); } catch (e) {}
   }
   petaAbsen = null;
-  if (googlePeta) {
-    googlePeta.lapisan.forEach(function (o) { try { o.setMap(null); } catch (e) {} });
-    googlePeta = null;
-    var kanvas = $('peta-lokasi');
-    if (kanvas) kanvas.innerHTML = '';   // lepas kanvas Google dari DOM
-  }
   var bungkus = $('peta-bungkus');
   if (bungkus) bungkus.hidden = true;
 }
@@ -678,111 +672,14 @@ function titikPeta(warna, jenis) {
   });
 }
 
-/* ---- Dua mesin peta: Google Maps / Leaflet (cadangan) ------------------
- *
- * Peta absen memakai Google Maps Platform bila GOOGLE_MAPS_API_KEY diisi di
- * config.js. Bila kunci kosong, ditolak (referrer/pembatasan API salah), atau
- * kuota map load habis, aplikasi TIDAK berhenti: peta otomatis memakai
- * Leaflet + ubin CARTO Voyager yang sudah tersimpan di perangkat, sehingga
- * absensi tetap bisa dilakukan dan rantai validasi server tidak berubah.
- *
- * Penghematan kuota:
- *  - skrip Google dimuat sekali per pembukaan aplikasi dan hanya saat peta
- *    pertama kali perlu digambar (bukan saat aplikasi dibuka),
- *  - satu instance peta dipakai ulang selama sesi,
- *  - yang dipakai hanya Maps JavaScript API — tanpa Places, Geocoding,
- *    Directions, atau Street View.
- */
-var PETA_GOOGLE_KEY = (typeof GOOGLE_MAPS_API_KEY === 'string') ? GOOGLE_MAPS_API_KEY : '';
-var PETA_GOOGLE_BATAS_MS = 9000;     // batas tunggu skrip Google
-var googleStatus = 'belum';          // belum | memuat | siap | gagal
-var googlePeta = null;               // { peta, lapisan: [] }
-var googleAntre = [];                // callback yang menunggu skrip siap
-var googleTimer = null;
-var petaTerakhir_ = null;            // parameter terakhir, untuk cadangan mendadak
-
-/** Selesaikan semua permintaan yang menunggu skrip Google (sekali saja). */
-function selesaiGoogleMaps_(ok) {
-  if (googleStatus === 'gagal') return;   // sudah beralih ke cadangan, jangan bolak-balik
-  if (ok && !(window.google && google.maps)) ok = false;
-  googleStatus = ok ? 'siap' : 'gagal';
-  if (googleTimer) { clearTimeout(googleTimer); googleTimer = null; }
-  // Kunci ditolak SETELAH peta Google tampil: jangan biarkan kotak peta kosong,
-  // langsung gambar ulang dengan cadangan memakai posisi terakhir.
-  if (!ok && googlePeta) {
-    var t = petaTerakhir_;
-    lepasPetaGoogle_();
-    if (t && $('peta-lokasi')) gambarPetaDaun(t.posisi, t.lokasi, t.hasil);
-  }
-  var antre = googleAntre;
-  googleAntre = [];
-  antre.forEach(function (f) { try { f(ok); } catch (e) {} });
-}
-
-/**
- * Muat skrip Google Maps sekali, lalu panggil cb(true) bila siap.
- * cb(false) berarti pakai peta cadangan — tanpa melempar error ke layar.
- */
-function muatGoogleMaps(cb) {
-  if (googleStatus === 'siap' && window.google && google.maps) { cb(true); return; }
-  if (!PETA_GOOGLE_KEY || googleStatus === 'gagal') { cb(false); return; }
-  googleAntre.push(cb);
-  if (googleStatus === 'memuat') return;
-  googleStatus = 'memuat';
-
-  window.__petaGoogleSiap = function () { selesaiGoogleMaps_(true); };
-  // Google memanggil ini bila kunci ditolak: referrer tidak cocok, API belum
-  // diaktifkan, tagihan mati, atau kuota harian habis.
-  window.gm_authFailure = function () {
-    if (typeof console !== 'undefined' && console.warn) {
-      console.warn('[peta] Google Maps menolak kunci ini (referrer, pembatasan API, tagihan, ' +
-        'atau kuota). Peta memakai cadangan Leaflet/CARTO.');
-    }
-    selesaiGoogleMaps_(false);
-  };
-
-  var s = document.createElement('script');
-  s.async = true;
-  s.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(PETA_GOOGLE_KEY) +
-    '&v=weekly&loading=async&callback=__petaGoogleSiap';
-  s.onerror = function () { selesaiGoogleMaps_(false); };
-  googleTimer = setTimeout(function () {
-    googleTimer = null;
-    if (googleStatus !== 'memuat') return;
-    if (typeof console !== 'undefined' && console.warn) {
-      console.warn('[peta] skrip Google Maps tidak selesai dalam ' + PETA_GOOGLE_BATAS_MS +
-        ' ms. Peta memakai cadangan Leaflet/CARTO.');
-    }
-    selesaiGoogleMaps_(false);
-  }, PETA_GOOGLE_BATAS_MS);
-  document.head.appendChild(s);
-}
-
-/** Angka bersama kedua mesin peta: radius, jarak, status, warna. */
-function ukuranPeta_(lokasi, hasil) {
-  var radius = angkaAtauNull(hasil && hasil.radius_m) || angkaAtauNull(lokasi && lokasi.radius_m) || 100;
-  var jarak = hasil ? angkaAtauNull(hasil.jarak_m) : null;
-  var valid = hasil ? !!hasil.valid : null;          // null = belum divalidasi server
-  return { radius: radius, jarak: jarak, valid: valid, warna: valid === false ? '#f0544f' : '#1b7a43' };
-}
-
-/** Lencana jarak + keterangan di bawah peta (dipakai kedua mesin). */
-function gambarKetPeta_(k) {
-  var lencana = $('peta-badge');
-  if (lencana) {
-    lencana.hidden = k.jarak === null;
-    lencana.className = 'peta-badge' + (k.valid === false ? ' di-luar' : '');
-    if (k.jarak !== null) lencana.textContent = 'Jarak ' + labelJarak(k.jarak);
-  }
-  var ket = $('peta-ket');
-  if (ket) {
-    ket.innerHTML = ikonSvg('bumi') + ' <span>Lingkaran absen ' + esc(Math.round(k.radius)) + ' m' +
-      (k.valid === false ? ' — posisi Anda di luar area' : ' · titik biru posisi Anda') + '</span>';
-  }
-}
-
 /**
  * Gambar (atau perbarui) peta area absen.
+ *
+ * Peta memakai Leaflet + ubin CARTO Voyager: gaya kartografi yang menyerupai
+ * Google Maps. Leaflet disajikan dari perangkat (vendor/), ubin dari jaringan.
+ * Tidak ada layanan peta berbayar, tidak ada kunci API, dan tidak ada kartu
+ * yang perlu ditempel — cukup jaringan untuk mengunduh ubin.
+ *
  * @param {object} posisi  {lat,lng,akurasi} hasil GPS pengguna
  * @param {object} lokasi  {latitude,longitude,radius_m,nama_lokasi} lokasi kerja
  * @param {object} hasil   hasil preview_absen (opsional; null = belum divalidasi)
@@ -794,50 +691,16 @@ function gambarPeta(posisi, lokasi, hasil) {
 
   var latLokasi = lokasi ? angkaAtauNull(lokasi.latitude) : null;
   var lngLokasi = lokasi ? angkaAtauNull(lokasi.longitude) : null;
-  if (!posisi || latLokasi === null || lngLokasi === null) {
+  if (!petaSiap() || !posisi || latLokasi === null || lngLokasi === null) {
     hancurkanPeta();
     return;
   }
 
-  bungkus.hidden = false;
-  petaTerakhir_ = { posisi: posisi, lokasi: lokasi, hasil: hasil };
+  var radius = angkaAtauNull(hasil && hasil.radius_m) || angkaAtauNull(lokasi.radius_m) || 100;
+  var jarak = hasil ? angkaAtauNull(hasil.jarak_m) : null;
+  var valid = hasil ? !!hasil.valid : null;          // null = belum divalidasi server
+  var warna = valid === false ? '#f0544f' : '#1b7a43';
 
-  if (PETA_GOOGLE_KEY && googleStatus !== 'gagal') {
-    if (googleStatus !== 'siap') {
-      el.innerHTML = '<div class="peta-muat"><span class="spinner spinner-sm" aria-hidden="true"></span>' +
-        '<span>Memuat peta…</span></div>';
-    }
-    muatGoogleMaps(function (ok) {
-      if (!$('peta-lokasi')) return;          // layar absen sudah ditutup
-      if (ok) gambarPetaGoogle(posisi, lokasi, hasil);
-      else gambarPetaDaun(posisi, lokasi, hasil);
-    });
-    return;
-  }
-  gambarPetaDaun(posisi, lokasi, hasil);
-}
-
-/** Urungkan peta Google yang sudah terlanjur dibuat (mis. kunci ditolak). */
-function lepasPetaGoogle_() {
-  if (!googlePeta) return;
-  googlePeta.lapisan.forEach(function (o) { try { o.setMap(null); } catch (e) {} });
-  googlePeta = null;
-  var el = $('peta-lokasi');
-  if (el) el.innerHTML = '';
-}
-
-/* ---- Mesin cadangan: Leaflet + ubin CARTO Voyager ---------------------- */
-function gambarPetaDaun(posisi, lokasi, hasil) {
-  var bungkus = $('peta-bungkus');
-  var el = $('peta-lokasi');
-  if (!bungkus || !el) return;
-  lepasPetaGoogle_();
-  if (!petaSiap()) { hancurkanPeta(); return; }
-
-  var latLokasi = angkaAtauNull(lokasi.latitude);
-  var lngLokasi = angkaAtauNull(lokasi.longitude);
-  if (latLokasi === null || lngLokasi === null) { hancurkanPeta(); return; }
-  var k = ukuranPeta_(lokasi, hasil);
   bungkus.hidden = false;
 
   if (!petaAbsen) {
@@ -865,18 +728,28 @@ function gambarPetaDaun(posisi, lokasi, hasil) {
 
   // area absen resmi
   L.circle([latLokasi, lngLokasi], {
-    radius: k.radius, color: k.warna, weight: 2, opacity: .9,
-    fillColor: k.warna, fillOpacity: .12, interactive: false
+    radius: radius, color: warna, weight: 2, opacity: .9,
+    fillColor: warna, fillOpacity: .12, interactive: false
   }).addTo(lap);
   L.marker([latLokasi, lngLokasi], {
-    icon: titikPeta(k.warna, 'kantor'), interactive: false, keyboard: false
+    icon: titikPeta(warna, 'kantor'), interactive: false, keyboard: false
   }).addTo(lap);
 
   // garis ukur antara posisi pengguna dan pusat area
-  if (k.jarak !== null && k.jarak > 0) {
+  if (jarak !== null && jarak > 0) {
     L.polyline([[posisi.lat, posisi.lng], [latLokasi, lngLokasi]], {
-      color: k.warna, weight: 2, opacity: .75, dashArray: '5 7', interactive: false
+      color: warna, weight: 2, opacity: .75, dashArray: '5 7', interactive: false
     }).addTo(lap);
+  }
+
+  // jarak ditulis sebagai lencana di sudut peta: pada jarak pendek titik dan
+  // pusat hanya beberapa piksel terpisah, label di tengah garis jadi tumpang
+  // tindih dengan titik pengguna.
+  var lencana = $('peta-badge');
+  if (lencana) {
+    lencana.hidden = jarak === null;
+    lencana.className = 'peta-badge' + (valid === false ? ' di-luar' : '');
+    if (jarak !== null) lencana.textContent = 'Jarak ' + labelJarak(jarak);
   }
 
   // posisi pengguna + lingkaran akurasi GPS (biru Google Maps)
@@ -891,7 +764,7 @@ function gambarPetaDaun(posisi, lokasi, hasil) {
   }).addTo(lap);
 
   // bingkai: pusat + tepi lingkaran + posisi pengguna
-  var batas = L.latLng(latLokasi, lngLokasi).toBounds(k.radius * 2.4);
+  var batas = L.latLng(latLokasi, lngLokasi).toBounds(radius * 2.4);
   batas.extend([posisi.lat, posisi.lng]);
   petaAbsen.peta.fitBounds(batas, { padding: [16, 16], maxZoom: 17 });
 
@@ -900,139 +773,11 @@ function gambarPetaDaun(posisi, lokasi, hasil) {
     if (petaAbsen && petaAbsen.peta) petaAbsen.peta.invalidateSize();
   }, 60);
 
-  gambarKetPeta_(k);
-}
-
-/* ---- Mesin utama: Google Maps Platform -------------------------------- */
-
-/**
- * Kunci yang ditolak/dibatasi tetap membuat API "berhasil dimuat", tetapi
- * Google mengganti petanya dengan GAMBAR STATIS berwatermark (tanpa marker,
- * tanpa zoom). Bila peta interaktif (.gm-style) tidak terbentuk dalam 3 detik,
- * peta dianggap gagal dan aplikasi memakai cadangan Leaflet — karyawan tidak
- * pernah melihat kotak “For development purposes only”.
- */
-function periksaPetaGoogle_() {
-  setTimeout(function () {
-    if (googleStatus !== 'siap' || !googlePeta) return;
-    var el = $('peta-lokasi');
-    if (!el) return;
-    if (el.querySelector('.gm-style')) return;      // peta interaktif normal
-    if (typeof console !== 'undefined' && console.warn) {
-      console.warn('[peta] Google Maps tidak membentuk peta interaktif (kunci ditolak, ' +
-        'pembatasan referrer/API, tagihan, atau kuota). Peta memakai cadangan Leaflet/CARTO.');
-    }
-    selesaiGoogleMaps_(false);
-  }, 3000);
-}
-
-/** Ikon data-URI untuk google.maps.Marker (tanpa berkas gambar tambahan). */
-function ikonGoogle_(svg, w, h, ax, ay) {
-  return {
-    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-    scaledSize: new google.maps.Size(w, h),
-    anchor: new google.maps.Point(ax, ay)
-  };
-}
-
-function pinSvg_(warna) {
-  return '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="39" viewBox="0 0 24 36">' +
-    '<path d="M12 0C5.37 0 0 5.37 0 12c0 8.4 12 24 12 24s12-15.6 12-24C24 5.37 18.63 0 12 0z" fill="' + warna + '"/>' +
-    '<circle cx="12" cy="12" r="4.6" fill="#fff"/></svg>';
-}
-
-function titikSvg_() {
-  return '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30">' +
-    '<circle cx="15" cy="15" r="14" fill="' + PETA_BIRU + '" fill-opacity=".18"/>' +
-    '<circle cx="15" cy="15" r="8" fill="#fff"/>' +
-    '<circle cx="15" cy="15" r="5.5" fill="' + PETA_BIRU + '"/></svg>';
-}
-
-function gambarPetaGoogle(posisi, lokasi, hasil) {
-  var el = $('peta-lokasi');
-  if (!el || !window.google || !google.maps) return;
-  var latLokasi = angkaAtauNull(lokasi && lokasi.latitude);
-  var lngLokasi = angkaAtauNull(lokasi && lokasi.longitude);
-  if (latLokasi === null || lngLokasi === null) return;
-  var k = ukuranPeta_(lokasi, hasil);
-
-  if (!googlePeta) {
-    el.innerHTML = '';
-    googlePeta = {
-      peta: new google.maps.Map(el, {
-        center: { lat: latLokasi, lng: lngLokasi },
-        zoom: 17,
-        disableDefaultUI: true,          // sisakan zoom saja, seperti Google Maps
-        zoomControl: true,
-        zoomControlOptions: { position: google.maps.ControlPosition.RIGHT_BOTTOM },
-        gestureHandling: 'cooperative',  // gulir halaman tidak "tertahan" peta
-        clickableIcons: false,
-        keyboardShortcuts: false,
-        mapTypeControl: false,
-        streetViewControl: false,
-        fullscreenControl: false
-      }),
-      lapisan: []
-    };
-    periksaPetaGoogle_();
+  var ket = $('peta-ket');
+  if (ket) {
+    ket.innerHTML = ikonSvg('bumi') + ' <span>Lingkaran absen ' + esc(Math.round(radius)) + ' m' +
+      (valid === false ? ' — posisi Anda di luar area' : ' · titik biru posisi Anda') + '</span>';
   }
-
-  var peta = googlePeta.peta;
-  googlePeta.lapisan.forEach(function (o) { try { o.setMap(null); } catch (e) {} });
-  googlePeta.lapisan = [];
-
-  // area absen resmi
-  googlePeta.lapisan.push(new google.maps.Circle({
-    map: peta, center: { lat: latLokasi, lng: lngLokasi }, radius: k.radius,
-    strokeColor: k.warna, strokeOpacity: .9, strokeWeight: 2,
-    fillColor: k.warna, fillOpacity: .12, clickable: false
-  }));
-  googlePeta.lapisan.push(new google.maps.Marker({
-    map: peta, position: { lat: latLokasi, lng: lngLokasi },
-    title: (lokasi && lokasi.nama_lokasi) || 'Lokasi kerja',
-    icon: ikonGoogle_(pinSvg_(k.warna), 26, 39, 13, 38),
-    clickable: false, optimized: false
-  }));
-
-  // garis ukur antara posisi pengguna dan pusat area (putus-putus)
-  if (k.jarak !== null && k.jarak > 0) {
-    googlePeta.lapisan.push(new google.maps.Polyline({
-      map: peta,
-      path: [{ lat: posisi.lat, lng: posisi.lng }, { lat: latLokasi, lng: lngLokasi }],
-      strokeColor: k.warna, strokeOpacity: .75, strokeWeight: 2, clickable: false,
-      icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 }, offset: '0', repeat: '12px' }]
-    }));
-  }
-
-  // posisi pengguna + lingkaran akurasi GPS (biru Google Maps)
-  if (posisi.akurasi > 0) {
-    googlePeta.lapisan.push(new google.maps.Circle({
-      map: peta, center: { lat: posisi.lat, lng: posisi.lng },
-      radius: Math.min(posisi.akurasi, 5000),
-      strokeColor: PETA_BIRU, strokeOpacity: .35, strokeWeight: 1,
-      fillColor: PETA_BIRU, fillOpacity: .12, clickable: false
-    }));
-  }
-  googlePeta.lapisan.push(new google.maps.Marker({
-    map: peta, position: { lat: posisi.lat, lng: posisi.lng }, title: 'Posisi Anda',
-    icon: ikonGoogle_(titikSvg_(), 30, 30, 15, 15),
-    clickable: false, optimized: false
-  }));
-
-  // bingkai: pusat + tepi lingkaran + posisi pengguna, maksimal zoom 17
-  var batas = new google.maps.LatLngBounds();
-  batas.extend({ lat: latLokasi, lng: lngLokasi });
-  batas.extend({ lat: posisi.lat, lng: posisi.lng });
-  var dLat = k.radius / 111320;
-  var dLng = k.radius / (111320 * Math.cos(latLokasi * Math.PI / 180) || 1);
-  batas.extend({ lat: latLokasi + dLat, lng: lngLokasi + dLng });
-  batas.extend({ lat: latLokasi - dLat, lng: lngLokasi - dLng });
-  peta.fitBounds(batas, { top: 16, right: 16, bottom: 16, left: 16 });
-  google.maps.event.addListenerOnce(peta, 'idle', function () {
-    if (googlePeta && googlePeta.peta === peta && peta.getZoom() > 17) peta.setZoom(17);
-  });
-
-  gambarKetPeta_(k);
 }
 
 function kodeJudul(kode) {

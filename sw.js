@@ -5,14 +5,13 @@
  * "mode offline" di luar cakupan (bagian 5 PRD).
  */
 
-var CACHE = 'absensi-shell-v13'; // Tahap 13: Google Maps Platform + peta cadangan, kamera, cache menu
+var CACHE = 'absensi-shell-v14'; // Tahap 14: peta gratis (Leaflet/CARTO) saja, kamera, cache menu
 var SHELL = [
   './',
   './index.html',
   './styles.css',
   './fonts/plus-jakarta-sans-latin.woff2',
   './fonts/plus-jakarta-sans-latin-ext.woff2',
-  './config.js',
   './api.js',
   './app.js',
   './vendor/leaflet/leaflet.js',

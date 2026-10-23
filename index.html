@@ -155,11 +155,9 @@
   <!-- Toast pesan -->
   <div class="toast" id="toast" hidden aria-live="polite"></div>
 
-  <!-- Konfigurasi publik (kunci Google Maps yang dibatasi referrer).
-       Harus dimuat sebelum app.js. Lihat komentar di config.js. -->
-  <script defer src="config.js"></script>
-  <!-- Leaflet disimpan lokal (bukan CDN) dan dipakai sebagai peta cadangan
-       bila Google Maps tidak tersedia; ubin peta tetap butuh jaringan. -->
+  <!-- Leaflet disimpan lokal (bukan CDN) supaya shell PWA tetap utuh saat
+       offline/jaringan buruk; ubin peta tetap butuh jaringan. Tidak ada
+       layanan peta berbayar — ubin CARTO dipakai gratis tanpa kunci API. -->
   <script defer src="vendor/leaflet/leaflet.js"></script>
   <script defer src="api.js"></script>
   <script defer src="app.js"></script>
