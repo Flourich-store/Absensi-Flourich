@@ -5,7 +5,7 @@
  * "mode offline" di luar cakupan (bagian 5 PRD).
  */
 
-var CACHE = 'absensi-shell-v10'; // Tahap 10: font lokal + absen satu layar
+var CACHE = 'absensi-shell-v11'; // Tahap 11: perbaikan boot/login + animasi memuat
 var SHELL = [
   './',
   './index.html',
