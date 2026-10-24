@@ -19,6 +19,17 @@
 var PETA_MAPLIBRE_V = '4.7.1';
 var PETA_CDN = 'https://unpkg.com/maplibre-gl@' + PETA_MAPLIBRE_V + '/dist/';
 
+/*
+ * SRI (Subresource Integrity) — hash sha384 dihitung langsung dari berkas
+ * yang disajikan unpkg CDN per tanggal 24 Okt 2026:
+ *   maplibre-gl.js  803086 bytes
+ *   maplibre-gl.css  65534 bytes
+ * Bila unpkg menyajikan berkas berbeda (mis. versi berubah), atribut integrity
+ * akan MENOLAK pemuatan — perbarui hash di sini bila itu terjadi.
+ */
+var PETA_SRI_JS  = 'sha384-4982801ba72095130dd1156f84d781634af715828d389b739f0034bfb079569f6daf7d71007b190b40ea910fe96439a3';
+var PETA_SRI_CSS = 'sha384-3229ced26365899defc29a6e3ce52719afa2abad7da5f3212d55177c2e0b1f0482bc5f47fba3ff28ee10eea04e615e55';
+
 /* Gaya OpenFreeMap: terang (positron) dan gelap. */
 var PETA_GAYA_TERANG = 'https://tiles.openfreemap.org/styles/positron';
 var PETA_GAYA_GELAP = 'https://tiles.openfreemap.org/styles/dark';
@@ -40,19 +51,23 @@ function muatMapLibre() {
       reject(new Error('MapLibre gagal dimuat (timeout).'));
     }, 8000);
 
-    // CSS
+    // CSS — dengan SRI integrity
     if (!document.querySelector('link[data-maplibre]')) {
       var link = document.createElement('link');
       link.rel = 'stylesheet';
       link.href = PETA_CDN + 'maplibre-gl.css';
+      link.integrity = PETA_SRI_CSS;
+      link.crossOrigin = 'anonymous';
       link.setAttribute('data-maplibre', '1');
       document.head.appendChild(link);
     }
 
-    // JS
+    // JS — dengan SRI integrity
     if (!document.querySelector('script[data-maplibre]')) {
       var s = document.createElement('script');
       s.src = PETA_CDN + 'maplibre-gl.js';
+      s.integrity = PETA_SRI_JS;
+      s.crossOrigin = 'anonymous';
       s.setAttribute('data-maplibre', '1');
       s.onload = function () {
         clearTimeout(timeout);
