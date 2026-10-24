@@ -7,12 +7,13 @@
  * disajikan dari github.io, pustaka termuat andal bersama shell PWA.
  *
  * Peta dimuat lazy (hanya saat layar yang butuh peta dibuka). Gaya peta:
- * OpenFreeMap Positron (terang) / Dark (gelap) otomatis mengikuti preferensi
- * perangkat — hanya ubin (gambar peta) yang datang dari jaringan.
+ * OpenFreeMap Positron (terang) pada siang hari, Dark (gelap) pada malam
+ * hari — pergantian mengikuti jam perangkat, bukan setelan tema perangkat;
+ * hanya ubin (gambar peta) yang datang dari jaringan.
  *
- * Penanganan galat: petaBuat() me-reject bila MapLibre gagal dimuat dalam
- * 8 detik. Pemanggil (app.js) menampilkan pesan singkat tanpa menghalangi
- * proses absen.
+ * Penanganan galat: petaBuat() me-reject bila MapLibre gagal dimuat atau
+ * gaya belum siap (timeout 12 detik). Pemanggil (app.js) menampilkan pesan
+ * singkat tanpa menghalangi proses absen.
  */
 
 'use strict';
@@ -77,9 +78,19 @@ function muatMapLibre() {
   return __maplibreDimuat;
 }
 
-/** Deteksi mode gelap perangkat. */
+/* Jam pergantian gaya peta (waktu perangkat). Indonesia dekat khatulistiwa:
+ * matahari terbit ±06.00 dan terbenam ±18.00 sepanjang tahun, jadi 06.00–18.00
+ * = siang (peta terang) dan 18.00–06.00 = malam (peta gelap). */
+var PETA_GELAP_DARI_JAM = 18;
+var PETA_GELAP_SAMPAI_JAM = 6;
+
+/**
+ * Peta bergaya gelap HANYA pada malam hari; siang hari selalu terang
+ * sesuai permintaan — tidak peduli setelan tema perangkat.
+ */
 function petaGelap() {
-  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  var jam = new Date().getHours();
+  return jam >= PETA_GELAP_DARI_JAM || jam < PETA_GELAP_SAMPAI_JAM;
 }
 
 /** URL gaya sesuai mode perangkat. */
