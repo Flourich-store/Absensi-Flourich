@@ -5,7 +5,7 @@
  * "mode offline" di luar cakupan (bagian 5 PRD).
  */
 
-var CACHE = 'absensi-shell-v18'; // Tahap 18: pustaka MapLibre disajikan lokal (vendor/maplibre), tanpa CDN
+var CACHE = 'absensi-shell-v19'; // Tahap 19: peta absen dikunci zoom otomatis (interaktif:false) + kunci generasi pembuatan peta
 var SHELL = [
   './',
   './index.html',

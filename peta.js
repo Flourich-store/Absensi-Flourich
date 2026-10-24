@@ -125,7 +125,11 @@ function petaBuat(el, opts) {
     // Tambah kontrol zoom (kanan bawah). Posisi MapLibre memakai hubung:
     // 'bottom-right', bukan 'bottomright' gaya Leaflet — nilai lain membuat
     // addControl melempar galat dan peta gagal total.
-    peta.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+    // Peta absen (interaktif:false) TANPA tombol +/-: hasil zoom otomatis ke
+    // lokasi harus bertahan, tidak bisa ditinggalkan lewat tombol maupun gestur.
+    if (opts.interaktif !== false) {
+      peta.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+    }
 
     // Tambah kontrol atribusi (kiri bawah)
     peta.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');

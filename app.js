@@ -614,6 +614,9 @@ SCREENS.beranda = {
  */
 var PETA_BIRU = '#1a73e8';      // biru titik posisi pengguna
 var petaAbsen = null;   // { peta, lapisanLingkaran, lapisanPenanda, hancurkan }
+var petaGenerasi = 0;   // penanda generasi pembuatan peta: nilai berubah = pembuatan basi
+                        // (dibatalkan) dan hasilnya harus dihancurkan, bukan dipakai.
+var petaArgTerkini = null; // argumen perbaruiPetaAbsen terakhir (untuk fit ulang saat idle)
 var absenJamTimer = null;
 
 /** Cek apakah modul peta.js sudah dimuat. */
@@ -628,6 +631,7 @@ function angkaAtauNull(v) {
 }
 
 function hancurkanPeta() {
+  petaGenerasi++;          // batalkan pembuatan yang masih berjalan (janji belum terpenuhi)
   if (petaAbsen && petaAbsen.hancurkan) {
     try { petaAbsen.hancurkan(); } catch (e) {}
   }
@@ -689,12 +693,27 @@ function gambarPeta(posisi, lokasi, hasil) {
     return;
   }
 
-  // Buat peta baru
+  // Buat peta baru. `gen` menandai generasi pembuatan: bila berubah sebelum janji
+  // terpenuhi (layar ditutup, atau panggilan kedua mengambil alih saat GPS cepat
+  // vs gaya lambat di HP), peta hasil pembuatan basi langsung dihancurkan.
+  // Tanpa ini, dua peta bisa hidup dalam satu kontainer / peta yatim tetap hidup
+  // setelah layar ditutup.
+  var gen = ++petaGenerasi;
   el.innerHTML = '';
-  petaBuat(el, { lat: latLokasi, lng: lngLokasi, zoom: 16 }).then(function (p) {
+  petaBuat(el, { lat: latLokasi, lng: lngLokasi, zoom: 16, interaktif: false }).then(function (p) {
+    if (gen !== petaGenerasi) { if (p.hancurkan) p.hancurkan(); return; }
     petaAbsen = p;
     perbaruiPetaAbsen(posisi, latLokasi, lngLokasi, radius, jarak, valid, warna);
+    // Setelah ubin pertama selesai digambar ('idle'), ulangi fit sekali: jaring
+    // pengaman bila kamera sempat tergeser saat gaya/ubin masih dimuat.
+    if (p.peta && p.peta.once) {
+      p.peta.once('idle', function () {
+        if (gen !== petaGenerasi || petaAbsen !== p || !petaArgTerkini) return;
+        perbaruiPetaAbsen.apply(null, petaArgTerkini);
+      });
+    }
   }).catch(function () {
+    if (gen !== petaGenerasi) return;
     petaGalat(el, 'Peta tidak tersedia. Pastikan internet aktif.');
     petaAbsen = null;
   });
@@ -702,6 +721,7 @@ function gambarPeta(posisi, lokasi, hasil) {
 
 function perbaruiPetaAbsen(posisi, latLokasi, lngLokasi, radius, jarak, valid, warna) {
   if (!petaAbsen) return;
+  petaArgTerkini = [posisi, latLokasi, lngLokasi, radius, jarak, valid, warna];
 
   // Lingkaran radius lokasi kerja
   petaAbsen.lapisanLingkaran('radius-lokasi', latLokasi, lngLokasi, radius, warna, 0.12);
