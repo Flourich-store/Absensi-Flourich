@@ -20,15 +20,20 @@ var PETA_MAPLIBRE_V = '4.7.1';
 var PETA_CDN = 'https://unpkg.com/maplibre-gl@' + PETA_MAPLIBRE_V + '/dist/';
 
 /*
- * SRI (Subresource Integrity) — hash sha384 dihitung langsung dari berkas
- * yang disajikan unpkg CDN per tanggal 24 Okt 2026:
- *   maplibre-gl.js  803086 bytes
- *   maplibre-gl.css  65534 bytes
- * Bila unpkg menyajikan berkas berbeda (mis. versi berubah), atribut integrity
- * akan MENOLAK pemuatan — perbarui hash di sini bila itu terjadi.
+ * SRI (Subresource Integrity) — digest SHA-384 dalam format BASE64, dihitung
+ * langsung dari berkas yang disajikan unpkg CDN per 24 Okt 2026:
+ *   maplibre-gl.js   803 086 bytes -> sha384-SYKAG6...0DqkQ/pZDmj
+ *   maplibre-gl.css   65 534 bytes -> sha384-MinO0m...Q7qBOYV5V
+ *
+ * Format integrity HARUS "sha384-" + base64(48-byte digest) = 64 karakter,
+ * BUKAN heksadesimal. (PowerShell: [Convert]::ToBase64String(
+ *   [System.Security.Cryptography.SHA384]::Create().ComputeHash(bytes)))
+ *
+ * Bila unpkg menyajikan berkas berbeda (mis. versi berubah), browser akan
+ * MENOLAK pemuatan — perbarui hash di sini bila itu terjadi.
  */
-var PETA_SRI_JS  = 'sha384-4982801ba72095130dd1156f84d781634af715828d389b739f0034bfb079569f6daf7d71007b190b40ea910fe96439a3';
-var PETA_SRI_CSS = 'sha384-3229ced26365899defc29a6e3ce52719afa2abad7da5f3212d55177c2e0b1f0482bc5f47fba3ff28ee10eea04e615e55';
+var PETA_SRI_JS  = 'sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj';
+var PETA_SRI_CSS = 'sha384-MinO0mNliZ3vwppuPOUnGa+iq619pfMhLVUXfC4LHwSCvF9H+6P/KO4Q7qBOYV5V';
 
 /* Gaya OpenFreeMap: terang (positron) dan gelap. */
 var PETA_GAYA_TERANG = 'https://tiles.openfreemap.org/styles/positron';
