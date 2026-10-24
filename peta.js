@@ -43,6 +43,44 @@ var __maplibreDimuat = null;   // Promise | null — muat sekali saja
 var __petaIdCounter = 0;
 
 /**
+ * Tentukan penyebab kegagalan pemuatan <script> SRI.
+ *
+ * Event 'error' tidak membedakan "jaringan gagal" vs "SRI ditolak", jadi
+ * berkas diunduh ulang di jalur gagal INI SAJA (tidak menambah beban muat
+ * awal) lalu hash-nya dihitung ulang dan dibandingkan dengan SRI yang benar:
+ *   - hash cocok      -> berkas identik, berarti jaringan/CDN yang bermasalah
+ *   - hash beda       -> CDN menyajikan berkas lain -> SRI ditolak
+ *   - unduh ulang mati-> CDN tidak terjangkau / diblokir
+ *
+ * @param {string} src        URL berkas yang gagal dimuat
+ * @param {string} sriDiharapkan  nilai integrity yang diharapkan
+ * @returns {Promise<string>} selalu resolve berisi alasan (Indonesia)
+ */
+function alasanGagalMuat(src, sriDiharapkan) {
+  var jaringan = 'unduhan CDN gagal (jaringan tidak stabil / diblokir)';
+  try {
+    if (!window.crypto || !window.crypto.subtle || typeof fetch !== 'function') {
+      return Promise.resolve(jaringan);
+    }
+    return fetch(src, { mode: 'cors', cache: 'no-store' })
+      .then(function (r) {
+        if (!r.ok) return 'CDN menjawab HTTP ' + r.status + ' — unduhan ditolak';
+        return r.arrayBuffer().then(function (buf) {
+          return window.crypto.subtle.digest('SHA-384', buf).then(function (d) {
+            var b = new Uint8Array(d), bin = '';
+            for (var i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
+            if ('sha384-' + btoa(bin) === sriDiharapkan) return jaringan;
+            return 'hash SRI tidak cocok — berkas CDN berbeda dari yang di-hash';
+          });
+        });
+      })
+      .catch(function () { return jaringan; });
+  } catch (e) {
+    return Promise.resolve(jaringan);
+  }
+}
+
+/**
  * Muat MapLibre GL JS (CSS + JS) dari CDN. Dipanggil sekali; pemanggilan
  * berikutnya memakai promise yang sama.
  * @returns {Promise} resolve saat window.maplibregl tersedia
@@ -53,7 +91,7 @@ function muatMapLibre() {
 
   __maplibreDimuat = new Promise(function (resolve, reject) {
     var timeout = setTimeout(function () {
-      reject(new Error('MapLibre gagal dimuat (timeout).'));
+      reject(new Error('waktu muat habis (8 detik) — jaringan lambat ke CDN'));
     }, 8000);
 
     // CSS — dengan SRI integrity
@@ -77,11 +115,13 @@ function muatMapLibre() {
       s.onload = function () {
         clearTimeout(timeout);
         if (window.maplibregl) resolve();
-        else reject(new Error('MapLibre tidak tersedia setelah dimuat.'));
+        else reject(new Error('berkas termuat tetapi maplibregl tidak tersedia'));
       };
       s.onerror = function () {
         clearTimeout(timeout);
-        reject(new Error('Gagal mengunduh MapLibre dari CDN.'));
+        alasanGagalMuat(s.src, PETA_SRI_JS).then(function (alasan) {
+          reject(new Error(alasan));
+        });
       };
       document.head.appendChild(s);
     } else {
