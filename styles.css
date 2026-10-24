@@ -595,57 +595,38 @@ table.data td.wrap { white-space: normal; min-width: 160px; }
 .modal-body { padding: 14px 16px calc(16px + env(safe-area-inset-bottom)); overflow-y: auto; }
 
 /* Peta absen: area absen = lingkaran resmi dari server.
-   Kartografinya sengaja dibuat seperti Google Maps (ubin CARTO Voyager):
-   sudut membulat tipis, tanpa bingkai hijau tebal, atribusi putih kecil di
-   kiri bawah, dan tombol +/− putih di kanan bawah. */
+   Peta memakai MapLibre GL JS + OpenFreeMap (gratis, tanpa API key).
+   Gaya mengikuti mode terang/gelap perangkat. */
 .peta-bungkus { position: relative; margin: 0 0 12px; }
 .peta {
   position: relative;
-  z-index: 0;                /* tahan pane Leaflet (z 400+) di bawah sheet */
+  z-index: 0;
   height: 280px;
   border-radius: 16px;
   overflow: hidden;
   border: 1px solid rgba(15, 23, 42, .08);
-  background: #e8eaed;       /* warna dasar ubin belum termuat */
+  background: #e8eaed;       /* warna dasar peta belum termuat */
   box-shadow: 0 1px 2px rgba(60, 64, 67, .3), 0 2px 8px rgba(60, 64, 67, .16);
 }
-.peta .leaflet-container { font: inherit; background: #e8eaed; }
-.peta .leaflet-control-attribution {
-  font-size: 10px; line-height: 1.7; color: #5f6368;
-  background: rgba(255, 255, 255, .82); border-radius: 0; padding: 0 4px; margin: 0;
-}
-.peta .leaflet-control-attribution a { color: #5f6368; text-decoration: none; }
-.peta .leaflet-control-zoom {
-  border: 0; border-radius: 8px; overflow: hidden;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, .3); margin: 0 10px 10px 0;
-}
-.peta .leaflet-control-zoom a {
-  width: 32px; height: 32px; line-height: 32px;
-  font-size: 20px; font-weight: 400; color: #666;
-  background: #fff; border: 0;
-}
-.peta .leaflet-control-zoom a:first-child { border-bottom: 1px solid #e8eaed; }
-.peta .leaflet-control-zoom a:hover { background: #f1f3f4; color: #202124; }
 .peta-ket { display: flex; align-items: center; gap: 8px; margin: 10px 4px 0; }
 .peta-ket .ico { width: 18px; height: 18px; }
-.peta-marker { background: none; border: 0; }
-.peta-pin {
-  display: block; width: 26px; height: 39px;
-  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .32));
-}
-.peta-titik {
-  display: block; width: 16px; height: 16px; margin: 7px;
+
+/* Penanda MapLibre (marker) */
+.pml-marker { cursor: default; }
+.pml-pin svg { display: block; filter: drop-shadow(0 2px 2px rgba(0,0,0,.32)); }
+.pml-titik { position: relative; width: 20px; height: 20px; }
+.pml-dot {
+  position: absolute; left: 2px; top: 2px; width: 16px; height: 16px;
   border-radius: 50%; background: var(--warna, #1a73e8);
-  border: 3px solid #fff;
-  box-shadow: 0 0 0 1px rgba(60, 64, 67, .2), 0 1px 4px rgba(60, 64, 67, .4);
+  border: 3px solid #fff; box-shadow: 0 0 0 1px rgba(60,64,67,.2), 0 1px 4px rgba(60,64,67,.4);
 }
-.peta-titik.saya { background: #1a73e8; }
-.peta-halo {
-  position: absolute; left: 50%; top: 50%;
-  width: 34px; height: 34px; margin: -17px 0 0 -17px;
+.pml-halo {
+  position: absolute; left: -7px; top: -7px; width: 34px; height: 34px;
   border-radius: 50%; pointer-events: none;
-  background: radial-gradient(circle, rgba(26, 115, 232, .3) 0%, rgba(26, 115, 232, 0) 70%);
+  background: radial-gradient(circle, rgba(26,115,232,.3) 0%, rgba(26,115,232,0) 70%);
 }
+
+/* Lencana jarak di sudut peta */
 .peta-badge {
   position: absolute; top: 12px; left: 12px; z-index: 500;
   padding: 4px 12px; border-radius: 999px;
@@ -658,16 +639,26 @@ table.data td.wrap { white-space: normal; min-width: 160px; }
 }
 .peta-badge.di-luar { color: var(--merah); border-color: var(--merah); }
 
-/* Tombol toggle Peta / Satellite di pojok kiri atas */
-.peta-toggle { display: flex; flex-direction: column; border: 0; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
-.peta-toggle a {
-  display: block; padding: 6px 10px; font-size: 12px; font-weight: 600;
-  color: #444; background: #fff; text-decoration: none; text-align: center;
-  border-bottom: 1px solid #ddd; line-height: 1.4; white-space: nowrap;
+/* Pesan galat peta */
+.peta-galat {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 14px; border-radius: 12px;
+  background: #fff3e0; color: #e65100; font-size: 13px;
+  border: 1px solid #ffe0b2;
 }
-.peta-toggle a:last-child { border-bottom: 0; }
-.peta-toggle a.aktif { background: #e8f0fe; color: #1a73e8; }
-.peta-toggle a:hover { background: #f1f3f4; }
+.peta-galat .ico { width: 18px; height: 18px; flex-shrink: 0; }
+
+/* Kontainer peta di form Lokasi admin */
+.lok-peta-bungkus { margin: 0 0 12px; }
+.lok-peta {
+  position: relative; height: 220px; border-radius: 12px; overflow: hidden;
+  border: 1px solid rgba(15,23,42,.1); background: #e8eaed;
+}
+/* Mode gelap perangkat */
+@media (prefers-color-scheme: dark) {
+  .peta, .lok-peta { background: #1a1a2e; border-color: rgba(255,255,255,.1); }
+  .peta-galat { background: #3e2723; color: #ffcc80; border-color: #5d4037; }
+}
 
 /* -------------------------------------------------- Absen satu layar */
 .absen-status {

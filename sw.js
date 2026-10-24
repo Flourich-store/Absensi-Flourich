@@ -5,7 +5,7 @@
  * "mode offline" di luar cakupan (bagian 5 PRD).
  */
 
-var CACHE = 'absensi-shell-v16'; // Tahap 16: Esri Street Map + toggle Satellite
+var CACHE = 'absensi-shell-v17'; // Tahap 17: MapLibre GL JS + OpenFreeMap ( Leaflet)
 var SHELL = [
   './',
   './index.html',
@@ -14,11 +14,7 @@ var SHELL = [
   './fonts/plus-jakarta-sans-latin-ext.woff2',
   './api.js',
   './app.js',
-  './vendor/leaflet/leaflet.js',
-  './vendor/leaflet/leaflet.css',
-  './vendor/leaflet/images/marker-icon.png',
-  './vendor/leaflet/images/marker-icon-2x.png',
-  './vendor/leaflet/images/marker-shadow.png',
+  './peta.js',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',

@@ -607,25 +607,18 @@ SCREENS.beranda = {
 /* tombol Kirim selama syarat belum lengkap.                          */
 /* ================================================================ */
 
-var PETA_MIN_ZOOM = 3;
 /*
- * Ubin peta: Esri World Street Map — gaya peta berwarna ala Google Maps:
- * jalan kuning/oranye, taman hijau, air biru, blok bangunan abu-abu.
- * Gratis tanpa kunci API (esri.com). Cadangan: CARTO Voyager lalu OSM.
- * Ada tombol toggle Peta/Satellite di pojok kiri atas peta.
+ * Peta memakai MapLibre GL JS + OpenFreeMap (gratis, tanpa API key).
+ * Modul peta.js dimuat lazy — hanya saat layar peta dibuka.
+ * Gaya: OpenFreeMap Positron (terang) / Dark (gelap) otomatis.
  */
-var PETA_TILE = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
-var PETA_TILE_SATELLIT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-var PETA_TILE_CADANGAN = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-var PETA_TILE_CADANGAN2 = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-var PETA_ATRIBUSI = '&copy; <a href="https://www.esri.com/">Esri</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
-var PETA_BIRU = '#1a73e8';      // biru titik posisi pengguna, seperti Google Maps
-var petaAbsen = null;   // { peta: L.Map, lapisan: L.LayerGroup }
+var PETA_BIRU = '#1a73e8';      // biru titik posisi pengguna
+var petaAbsen = null;   // { peta, lapisanLingkaran, lapisanPenanda, hancurkan }
 var absenJamTimer = null;
-var petaModeSatelit = false;   // false = peta jalan, true = citra satelit
 
+/** Cek apakah modul peta.js sudah dimuat. */
 function petaSiap() {
-  return typeof L !== 'undefined' && L && typeof L.map === 'function';
+  return typeof muatMapLibre === 'function' && typeof petaBuat === 'function';
 }
 
 function angkaAtauNull(v) {
@@ -635,8 +628,8 @@ function angkaAtauNull(v) {
 }
 
 function hancurkanPeta() {
-  if (petaAbsen && petaAbsen.peta) {
-    try { petaAbsen.peta.remove(); } catch (e) {}
+  if (petaAbsen && petaAbsen.hancurkan) {
+    try { petaAbsen.hancurkan(); } catch (e) {}
   }
   petaAbsen = null;
   var bungkus = $('peta-bungkus');
@@ -651,37 +644,21 @@ function labelJarak(m) {
 }
 
 /**
- * Penanda peta bergaya Google Maps:
- *  - 'kantor' -> pin tetes air (teardrop) berwarna, ujungnya menunjuk koordinat
- *  - 'saya'   -> titik biru dengan cincin putih + halo lembut
+ * Tampilkan pesan galat peta tanpa memblokir alur absen.
  */
-function titikPeta(warna, jenis) {
-  if (jenis === 'kantor') {
-    return L.divIcon({
-      className: 'peta-marker peta-marker-pin',
-      html: '<svg class="peta-pin" viewBox="0 0 24 36" aria-hidden="true">' +
-        '<path d="M12 0C5.37 0 0 5.37 0 12c0 8.4 12 24 12 24s12-15.6 12-24C24 5.37 18.63 0 12 0z" fill="' + warna + '"/>' +
-        '<circle cx="12" cy="12" r="4.6" fill="#fff"/></svg>',
-      iconSize: [26, 39],
-      iconAnchor: [13, 38]
-    });
+function petaGalat(kotak, pesan) {
+  if (kotak) {
+    kotak.innerHTML = '<div class="peta-galat">' + ikonSvg('peringatan') +
+      ' <span>' + esc(pesan || 'Peta tidak tersedia. Pastikan internet aktif.') + '</span></div>';
   }
-  return L.divIcon({
-    className: 'peta-marker',
-    html: '<span class="peta-halo"></span>' +
-      '<span class="peta-titik saya" style="--warna:' + warna + '"></span>',
-    iconSize: [30, 30],
-    iconAnchor: [15, 15]
-  });
 }
 
 /**
- * Gambar (atau perbarui) peta area absen.
+ * Gambar (atau perbarui) peta area absen — MapLibre GL JS + OpenFreeMap.
  *
- * Peta memakai Leaflet + ubin CARTO Voyager: gaya kartografi yang menyerupai
- * Google Maps. Leaflet disajikan dari perangkat (vendor/), ubin dari jaringan.
- * Tidak ada layanan peta berbayar, tidak ada kunci API, dan tidak ada kartu
- * yang perlu ditempel — cukup jaringan untuk mengunduh ubin.
+ * Peta kecil berisi: posisi karyawan (titik biru), lokasi kerja (pin),
+ * lingkaran radius, dan jarak. Bila MapLibre gagal dimuat, tampilkan pesan
+ * singkat tanpa menghalangi proses absen.
  *
  * @param {object} posisi  {lat,lng,akurasi} hasil GPS pengguna
  * @param {object} lokasi  {latitude,longitude,radius_m,nama_lokasi} lokasi kerja
@@ -706,117 +683,45 @@ function gambarPeta(posisi, lokasi, hasil) {
 
   bungkus.hidden = false;
 
-  if (!petaAbsen) {
-    el.innerHTML = '';
-    var p = L.map(el, {
-      zoomControl: false,
-      scrollWheelZoom: false,   // gulir halaman tidak "tertahan" peta di ponsel
-      attributionControl: true,
-      minZoom: PETA_MIN_ZOOM
-    });
-    // Tombol +/− di kanan bawah dan atribusi di kiri bawah, seperti Google Maps.
-    L.control.zoom({ position: 'bottomright' }).addTo(p);
-    if (p.attributionControl) p.attributionControl.setPosition('bottomleft');
-
-    // ---- Ubin peta: Esri Street Map (utama) + CARTO + OSM (cadangan) ----
-    // Bila ≥4 ubin utama gagal, otomatis pindah ke cadangan berikutnya
-    // agar peta tidak pernah kosong.
-    var daftarUbin = [
-      { url: PETA_TILE, opt: { maxZoom: 19, attribution: PETA_ATRIBUSI } },
-      { url: PETA_TILE_CADANGAN, opt: { maxZoom: 19, subdomains: 'abcd', detectRetina: true,
-          attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' } },
-      { url: PETA_TILE_CADANGAN2, opt: { maxZoom: 19,
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' } }
-    ];
-    var idxUbin = 0;
-    var ubinAktif = null;
-
-    function pasangUbin(i) {
-      if (i >= daftarUbin.length) return;
-      if (ubinAktif) { try { p.removeLayer(ubinAktif); } catch (e) {} }
-      idxUbin = i;
-      var u = daftarUbin[i];
-      ubinAktif = L.tileLayer(u.url, u.opt);
-      var galat = 0;
-      var pindah = false;
-      ubinAktif.on('tileerror', function () {
-        galat++;
-        if (galat >= 4 && !pindah) { pindah = true; pasangUbin(i + 1); }
-      });
-      ubinAktif.addTo(p);
-    }
-
-    // Mode peta jalan vs satelit — disimpan di petaAbsen agar bisa diganti
-    function buatUbinMode(satelit) {
-      if (satelit) {
-        return L.tileLayer(PETA_TILE_SATELLIT, { maxZoom: 19, attribution: PETA_ATRIBUSI });
-      }
-      pasangUbin(0);
-      return null;
-    }
-
-    var ubinSatelit = petaModeSatelit ? L.tileLayer(PETA_TILE_SATELLIT, { maxZoom: 19, attribution: PETA_ATRIBUSI }) : null;
-    if (ubinSatelit) ubinSatelit.addTo(p); else pasangUbin(0);
-
-    // Tombol toggle Peta / Satellite di pojok kiri atas (seperti Google Maps)
-    var toggle = L.control({ position: 'topleft' });
-    toggle.onAdd = function () {
-      var div = L.DomUtil.create('div', 'leaflet-bar peta-toggle');
-      div.innerHTML =
-        '<a href="#" id="peta-toggle-jalan" title="Peta jalan"' +
-          (petaModeSatelit ? '' : ' class="aktif"') + '>🗺️ Peta</a>' +
-        '<a href="#" id="peta-toggle-satelit" title="Citra satelit"' +
-          (petaModeSatelit ? ' class="aktif"' : '') + '>🛰️ Satelit</a>';
-      L.DomEvent.disableClickPropagation(div);
-      L.DomEvent.on(div.querySelector('#peta-toggle-jalan'), 'click', function (ev) {
-        ev.preventDefault(); ev.stopPropagation();
-        if (!petaModeSatelit) return;
-        petaModeSatelit = false;
-        if (ubinSatelit) { try { p.removeLayer(ubinSatelit); } catch (e) {} ubinSatelit = null; }
-        pasangUbin(0);
-        div.querySelector('#peta-toggle-jalan').className = 'aktif';
-        div.querySelector('#peta-toggle-satelit').className = '';
-      });
-      L.DomEvent.on(div.querySelector('#peta-toggle-satelit'), 'click', function (ev) {
-        ev.preventDefault(); ev.stopPropagation();
-        if (petaModeSatelit) return;
-        petaModeSatelit = true;
-        // lepas ubin jalan + reset cadangan
-        if (ubinAktif) { try { p.removeLayer(ubinAktif); } catch (e) {} ubinAktif = null; }
-        ubinSatelit = L.tileLayer(PETA_TILE_SATELLIT, { maxZoom: 19, attribution: PETA_ATRIBUSI });
-        ubinSatelit.addTo(p);
-        div.querySelector('#peta-toggle-jalan').className = '';
-        div.querySelector('#peta-toggle-satelit').className = 'aktif';
-      });
-      return div;
-    };
-    toggle.addTo(p);
-
-    petaAbsen = { peta: p, lapisan: L.layerGroup().addTo(p) };
+  // Bila peta sudah ada, cukup perbarui posisi/lapisan
+  if (petaAbsen) {
+    perbaruiPetaAbsen(posisi, latLokasi, lngLokasi, radius, jarak, valid, warna);
+    return;
   }
 
-  var lap = petaAbsen.lapisan;
-  lap.clearLayers();
+  // Buat peta baru
+  el.innerHTML = '';
+  petaBuat(el, { lat: latLokasi, lng: lngLokasi, zoom: 16 }).then(function (p) {
+    petaAbsen = p;
+    perbaruiPetaAbsen(posisi, latLokasi, lngLokasi, radius, jarak, valid, warna);
+  }).catch(function () {
+    petaGalat(el, 'Peta tidak tersedia. Pastikan internet aktif.');
+    petaAbsen = null;
+  });
+}
 
-  // area absen resmi
-  L.circle([latLokasi, lngLokasi], {
-    radius: radius, color: warna, weight: 2, opacity: .9,
-    fillColor: warna, fillOpacity: .12, interactive: false
-  }).addTo(lap);
-  L.marker([latLokasi, lngLokasi], {
-    icon: titikPeta(warna, 'kantor'), interactive: false, keyboard: false
-  }).addTo(lap);
+function perbaruiPetaAbsen(posisi, latLokasi, lngLokasi, radius, jarak, valid, warna) {
+  if (!petaAbsen) return;
 
-  // garis ukur antara posisi pengguna dan pusat area
-  if (jarak !== null && jarak > 0) {
-    L.polyline([[posisi.lat, posisi.lng], [latLokasi, lngLokasi]], {
-      color: warna, weight: 2, opacity: .75, dashArray: '5 7', interactive: false
-    }).addTo(lap);
+  // Lingkaran radius lokasi kerja
+  petaAbsen.lapisanLingkaran('radius-lokasi', latLokasi, lngLokasi, radius, warna, 0.12);
+
+  // Pin lokasi kerja
+  petaAbsen.lapisanPenanda('pin-lokasi', latLokasi, lngLokasi, { jenis: 'pin', warna: warna });
+
+  // Titik biru posisi pengguna + lingkaran akurasi GPS
+  if (posisi.akurasi > 0) {
+    petaAbsen.lapisanLingkaran('radius-akurasi', posisi.lat, posisi.lng, Math.min(posisi.akurasi, 5000), PETA_BIRU, 0.10);
   }
+  petaAbsen.lapisanPenanda('titik-saya', posisi.lat, posisi.lng, { jenis: 'titik', warna: PETA_BIRU });
 
-  // jarak ditulis sebagai lencana di sudut peta: pada jarak pendek titik dan
-  // pusat hanya beberapa piksel terpisah, label di tengah garis jadi tumpang
-  // tindih dengan titik pengguna.
+  // Bingkai peta: pusat + posisi pengguna
+  try {
+    var bounds = new maplibregl.LngLatBounds([lngLokasi, latLokasi], [posisi.lng, posisi.lat]);
+    petaAbsen.peta.fitBounds(bounds, { padding: 24, maxZoom: 17, duration: 0 });
+  } catch (e) {}
+
+  // Lencana jarak
   var lencana = $('peta-badge');
   if (lencana) {
     lencana.hidden = jarak === null;
@@ -824,27 +729,7 @@ function gambarPeta(posisi, lokasi, hasil) {
     if (jarak !== null) lencana.textContent = 'Jarak ' + labelJarak(jarak);
   }
 
-  // posisi pengguna + lingkaran akurasi GPS (biru Google Maps)
-  if (posisi.akurasi > 0) {
-    L.circle([posisi.lat, posisi.lng], {
-      radius: Math.min(posisi.akurasi, 5000), color: PETA_BIRU, weight: 1, opacity: .35,
-      fillColor: PETA_BIRU, fillOpacity: .12, interactive: false
-    }).addTo(lap);
-  }
-  L.marker([posisi.lat, posisi.lng], {
-    icon: titikPeta(PETA_BIRU, 'saya'), interactive: false, keyboard: false
-  }).addTo(lap);
-
-  // bingkai: pusat + tepi lingkaran + posisi pengguna
-  var batas = L.latLng(latLokasi, lngLokasi).toBounds(radius * 2.4);
-  batas.extend([posisi.lat, posisi.lng]);
-  petaAbsen.peta.fitBounds(batas, { padding: [16, 16], maxZoom: 17 });
-
-  // kontainer bisa baru berukuran setelah overlay tampil
-  setTimeout(function () {
-    if (petaAbsen && petaAbsen.peta) petaAbsen.peta.invalidateSize();
-  }, 60);
-
+  // Keterangan
   var ket = $('peta-ket');
   if (ket) {
     ket.innerHTML = ikonSvg('bumi') + ' <span>Lingkaran absen ' + esc(Math.round(radius)) + ' m' +
@@ -1795,6 +1680,12 @@ function renderAbsensi(kotak) {
     if (r.link_foto_masuk) foto += '<a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="' + esc(r.link_foto_masuk) + '">' + ikonSvg('kamera') + ' Foto Masuk</a> ';
     if (r.link_foto_pulang) foto += '<a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="' + esc(r.link_foto_pulang) + '">' + ikonSvg('kamera') + ' Foto Pulang</a>';
     if (!foto) foto = '<span class="small muted">—</span>';
+    // Tombol Lihat Peta hanya bila koordinat tersedia di data
+    var adaPeta = (angkaAtauNull(r.lat_masuk) !== null && angkaAtauNull(r.lng_masuk) !== null) ||
+                  (angkaAtauNull(r.lat_pulang) !== null && angkaAtauNull(r.lng_pulang) !== null);
+    var tombolPeta = adaPeta
+      ? '<button type="button" class="btn btn-outline btn-sm" data-peta-absen="' + esc(r.id_absen) + '">' + ikonSvg('lokasi') + ' Lihat Peta</button> '
+      : '';
     return '<div class="row-item">' +
       '<div class="row-head"><span class="row-name">' + esc(tampilTanggal(r.tanggal)) + ' · ' + esc(r.nama) + '</span>' + badgeStatusAbsen(r.status) + '</div>' +
       '<div class="row-meta">Masuk ' + esc(tampilJam(r.jam_masuk) || '—') +
@@ -1803,7 +1694,7 @@ function renderAbsensi(kotak) {
       (r.alasan_terlambat ? '<div class="row-meta">Alasan terlambat: ' + esc(r.alasan_terlambat) + '</div>' : '') +
       (r.dikoreksi ? '<div class="row-meta">' + ikonSvg('pensil') + ' Dikoreksi — ' + esc(r.catatan_koreksi) + '</div>' : '') +
       '<div class="btn-row">' + foto + '</div>' +
-      '<div class="btn-row">' +
+      '<div class="btn-row">' + tombolPeta +
         '<button type="button" class="btn btn-primary btn-sm" data-koreksi="' + esc(r.id_absen) + '">Koreksi</button>' +
       '</div>' +
     '</div>';
@@ -1813,6 +1704,53 @@ function renderAbsensi(kotak) {
     b.addEventListener('click', function () {
       var rec = absensiState.daftar.filter(function (x) { return x.id_absen === b.dataset.koreksi; })[0];
       if (rec) bukaKoreksi(rec);
+    });
+  });
+  Array.prototype.forEach.call(kotak.querySelectorAll('[data-peta-absen]'), function (b) {
+    b.addEventListener('click', function () {
+      var rec = absensiState.daftar.filter(function (x) { return x.id_absen === b.dataset.petaAbsen; })[0];
+      if (rec) bukaPetaAbsensi(rec);
+    });
+  });
+}
+
+/**
+ * Buka modal peta kecil menampilkan titik absen karyawan.
+ */
+function bukaPetaAbsensi(r) {
+  var latMasuk = angkaAtauNull(r.lat_masuk);
+  var lngMasuk = angkaAtauNull(r.lng_masuk);
+  var latPulang = angkaAtauNull(r.lat_pulang);
+  var lngPulang = angkaAtauNull(r.lng_pulang);
+  var html =
+    '<p class="small muted">' + esc(tampilTanggal(r.tanggal)) + ' · ' + esc(r.nama) + '</p>' +
+    '<div class="lok-peta-bungkus">' +
+      '<div class="lok-peta" id="peta-absen-detail" role="img" aria-label="Peta titik absen"></div>' +
+    '</div>' +
+    '<div class="small muted" id="peta-absen-info">Memuat peta…</div>';
+  bukaModal('Peta Absensi', html, function () {
+    var el = $('peta-absen-detail');
+    var info = $('peta-absen-info');
+    var latTengah = latMasuk || latPulang || 0;
+    var lngTengah = lngMasuk || lngPulang || 0;
+    petaBuat(el, { lat: latTengah, lng: lngTengah, zoom: 17 }).then(function (p) {
+      var baris = [];
+      if (latMasuk !== null && lngMasuk !== null) {
+        p.lapisanPenanda('absen-masuk', latMasuk, lngMasuk, { jenis: 'pin', warna: '#1b7a43' });
+        baris.push('Masuk: ' + latMasuk.toFixed(6) + ', ' + lngMasuk.toFixed(6));
+      }
+      if (latPulang !== null && lngPulang !== null) {
+        p.lapisanPenanda('absen-pulang', latPulang, lngPulang, { jenis: 'pin', warna: '#f0544f' });
+        baris.push('Pulang: ' + latPulang.toFixed(6) + ', ' + lngPulang.toFixed(6));
+      }
+      info.textContent = baris.join(' · ');
+      // Bila hanya ada satu titik, fokus ke situ
+      if (latMasuk !== null && lngMasuk !== null && latPulang === null) {
+        try { p.peta.easeTo({ center: [lngMasuk, latMasuk], zoom: 17 }); } catch (e) {}
+      }
+    }).catch(function () {
+      petaGalat(el, 'Peta tidak tersedia. Pastikan internet aktif.');
+      info.textContent = '';
     });
   });
 }
@@ -2170,6 +2108,10 @@ function bukaFormLokasi(l) {
     '<form id="form-lokasi" novalidate>' +
       (baru ? '' : '<input type="hidden" id="lok-id" value="' + esc(l.id_lokasi) + '">') +
       '<label class="field"><span>Nama lokasi</span><input type="text" id="lok-nama" maxlength="100" value="' + esc(baru ? '' : l.nama_lokasi) + '" required></label>' +
+      '<div class="lok-peta-bungkus" id="lok-peta-bungkus" hidden>' +
+        '<div class="lok-peta" id="lok-peta" role="img" aria-label="Peta lokasi — geser pin untuk mengatur koordinat"></div>' +
+        '<p class="peta-ket small muted" id="lok-peta-ket">Geser pin untuk mengatur posisi lokasi.</p>' +
+      '</div>' +
       '<label class="field"><span>Latitude</span><input type="text" inputmode="decimal" id="lok-lat" value="' + esc(baru ? '' : l.latitude) + '" required></label>' +
       '<label class="field"><span>Longitude</span><input type="text" inputmode="decimal" id="lok-lng" value="' + esc(baru ? '' : l.longitude) + '" required></label>' +
       '<button type="button" class="btn btn-outline btn-block" id="lok-pakai">' + ikonSvg('lokasi') + ' Pakai Lokasi Saya</button>' +
@@ -2178,6 +2120,47 @@ function bukaFormLokasi(l) {
       '<button type="submit" class="btn btn-primary btn-block" id="btn-lok-simpan">' + (baru ? 'Tambah Lokasi' : 'Simpan Perubahan') + '</button>' +
     '</form>';
   bukaModal(baru ? 'Tambah Lokasi' : 'Ubah Lokasi', html, function () {
+    var petaLokasi = null;   // instance MapLibre di form ini
+
+    /** Perbarui peta berdasarkan nilai input lat/lng/radius. */
+    function perbaruiPetaForm() {
+      if (!petaLokasi) return;
+      var lat = angkaAtauNull($('lok-lat').value);
+      var lng = angkaAtauNull($('lok-lng').value);
+      var radius = angkaAtauNull($('lok-radius').value) || 100;
+      if (lat === null || lng === null) return;
+      petaLokasi.lapisanLingkaran('radius-form', lat, lng, radius, '#1b7a43', 0.12);
+      petaLokasi.lapisanPenanda('pin-form', lat, lng, {
+        jenis: 'pin', warna: '#1b7a43', draggable: true,
+        onDrag: function (nLat, nLng) {
+          $('lok-lat').value = Math.round(nLat * 1e6) / 1e6;
+          $('lok-lng').value = Math.round(nLng * 1e6) / 1e6;
+        },
+        onDragEnd: function () { perbaruiPetaForm(); }
+      });
+      try { petaLokasi.peta.easeTo({ center: [lng, lat], duration: 300 }); } catch (e) {}
+    }
+
+    // Muat peta (lazy) — bila gagal, form tetap berfungsi tanpa peta
+    var bungkus = $('lok-peta-bungkus');
+    var elPeta = $('lok-peta');
+    var latAwal = angkaAtauNull($('lok-lat').value);
+    var lngAwal = angkaAtauNull($('lok-lng').value);
+    if (latAwal === null || lngAwal === null) { latAwal = -0.5; lngAwal = 101.45; } // default Pekanbaru-ish
+    bungkus.hidden = false;
+    petaBuat(elPeta, { lat: latAwal, lng: lngAwal, zoom: 15 }).then(function (p) {
+      petaLokasi = p;
+      perbaruiPetaForm();
+    }).catch(function () {
+      petaGalat(elPeta, 'Peta tidak tersedia. Isi koordinat manual.');
+    });
+
+    // Input berubah → perbarui peta
+    ['lok-lat', 'lok-lng', 'lok-radius'].forEach(function (id) {
+      $(id).addEventListener('change', perbaruiPetaForm);
+      $(id).addEventListener('input', perbaruiPetaForm);
+    });
+
     $('lok-pakai').addEventListener('click', function () {
       var b = this;
       setBusy(b, true, 'Membaca GPS…');
@@ -2186,6 +2169,7 @@ function bukaFormLokasi(l) {
         if (galat) { toast(galat.pesan, 'err'); return; }
         $('lok-lat').value = Math.round(pos.lat * 1e6) / 1e6;
         $('lok-lng').value = Math.round(pos.lng * 1e6) / 1e6;
+        perbaruiPetaForm();
         toast('Koordinat dari GPS terisi (akurasi ± ' + Math.round(pos.akurasi) + ' m).', 'ok');
       });
     });
