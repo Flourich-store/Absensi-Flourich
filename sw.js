@@ -5,7 +5,7 @@
  * "mode offline" di luar cakupan (bagian 5 PRD).
  */
 
-var CACHE = 'absensi-shell-v17'; // Tahap 17: MapLibre GL JS + OpenFreeMap ( Leaflet)
+var CACHE = 'absensi-shell-v18'; // Tahap 18: pustaka MapLibre disajikan lokal (vendor/maplibre), tanpa CDN
 var SHELL = [
   './',
   './index.html',
@@ -15,6 +15,8 @@ var SHELL = [
   './api.js',
   './app.js',
   './peta.js',
+  './vendor/maplibre/maplibre-gl.js',
+  './vendor/maplibre/maplibre-gl.css',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',

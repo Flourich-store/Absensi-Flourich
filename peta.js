@@ -1,39 +1,25 @@
 /**
  * peta.js — modul peta MapLibre GL JS + OpenFreeMap (gratis, tanpa API key).
  *
- * MapLibre dimuat lazy (hanya saat layar yang butuh peta dibuka) dari CDN
- * dengan versi dipin. Gaya peta: OpenFreeMap Positron (terang) / Dark (gelap)
- * otomatis mengikuti preferensi perangkat.
+ * Pustaka MapLibre disajikan LOKAL dari vendor/maplibre/ (origin yang sama
+ * dengan aplikasi), bukan dari CDN luar. Alasan: unpkg/CDN sering lambat atau
+ * diblokir di jaringan Indonesia sehingga peta gagal muncul di HP. Dengan
+ * disajikan dari github.io, pustaka termuat andal bersama shell PWA.
  *
- * Tidak ada ubin yang di-cache besar-besaran di service worker — ubin hanya
- * di-cache browser secara normal (HTTP cache).
+ * Peta dimuat lazy (hanya saat layar yang butuh peta dibuka). Gaya peta:
+ * OpenFreeMap Positron (terang) / Dark (gelap) otomatis mengikuti preferensi
+ * perangkat — hanya ubin (gambar peta) yang datang dari jaringan.
  *
  * Penanganan galat: petaBuat() me-reject bila MapLibre gagal dimuat dalam
- * 8 detik atau style tidak tersedia. Pemanggil (app.js) menampilkan pesan
- * singkat tanpa menghalangi proses absen.
+ * 8 detik. Pemanggil (app.js) menampilkan pesan singkat tanpa menghalangi
+ * proses absen.
  */
 
 'use strict';
 
-/* Versi MapLibre GL JS yang dipin (jangan @latest). */
-var PETA_MAPLIBRE_V = '4.7.1';
-var PETA_CDN = 'https://unpkg.com/maplibre-gl@' + PETA_MAPLIBRE_V + '/dist/';
-
-/*
- * SRI (Subresource Integrity) — digest SHA-384 dalam format BASE64, dihitung
- * langsung dari berkas yang disajikan unpkg CDN per 24 Okt 2026:
- *   maplibre-gl.js   803 086 bytes -> sha384-SYKAG6...0DqkQ/pZDmj
- *   maplibre-gl.css   65 534 bytes -> sha384-MinO0m...Q7qBOYV5V
- *
- * Format integrity HARUS "sha384-" + base64(48-byte digest) = 64 karakter,
- * BUKAN heksadesimal. (PowerShell: [Convert]::ToBase64String(
- *   [System.Security.Cryptography.SHA384]::Create().ComputeHash(bytes)))
- *
- * Bila unpkg menyajikan berkas berbeda (mis. versi berubah), browser akan
- * MENOLAK pemuatan — perbarui hash di sini bila itu terjadi.
- */
-var PETA_SRI_JS  = 'sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj';
-var PETA_SRI_CSS = 'sha384-MinO0mNliZ3vwppuPOUnGa+iq619pfMhLVUXfC4LHwSCvF9H+6P/KO4Q7qBOYV5V';
+/* Lokasi pustaka MapLibre lokal (sudah masuk cache shell di sw.js). */
+var PETA_MAPLIBRE_JS = './vendor/maplibre/maplibre-gl.js';
+var PETA_MAPLIBRE_CSS = './vendor/maplibre/maplibre-gl.css';
 
 /* Gaya OpenFreeMap: terang (positron) dan gelap. */
 var PETA_GAYA_TERANG = 'https://tiles.openfreemap.org/styles/positron';
@@ -41,44 +27,6 @@ var PETA_GAYA_GELAP = 'https://tiles.openfreemap.org/styles/dark';
 
 var __maplibreDimuat = null;   // Promise | null — muat sekali saja
 var __petaIdCounter = 0;
-
-/**
- * Tentukan penyebab kegagalan pemuatan <script> SRI.
- *
- * Event 'error' tidak membedakan "jaringan gagal" vs "SRI ditolak", jadi
- * berkas diunduh ulang di jalur gagal INI SAJA (tidak menambah beban muat
- * awal) lalu hash-nya dihitung ulang dan dibandingkan dengan SRI yang benar:
- *   - hash cocok      -> berkas identik, berarti jaringan/CDN yang bermasalah
- *   - hash beda       -> CDN menyajikan berkas lain -> SRI ditolak
- *   - unduh ulang mati-> CDN tidak terjangkau / diblokir
- *
- * @param {string} src        URL berkas yang gagal dimuat
- * @param {string} sriDiharapkan  nilai integrity yang diharapkan
- * @returns {Promise<string>} selalu resolve berisi alasan (Indonesia)
- */
-function alasanGagalMuat(src, sriDiharapkan) {
-  var jaringan = 'unduhan CDN gagal (jaringan tidak stabil / diblokir)';
-  try {
-    if (!window.crypto || !window.crypto.subtle || typeof fetch !== 'function') {
-      return Promise.resolve(jaringan);
-    }
-    return fetch(src, { mode: 'cors', cache: 'no-store' })
-      .then(function (r) {
-        if (!r.ok) return 'CDN menjawab HTTP ' + r.status + ' — unduhan ditolak';
-        return r.arrayBuffer().then(function (buf) {
-          return window.crypto.subtle.digest('SHA-384', buf).then(function (d) {
-            var b = new Uint8Array(d), bin = '';
-            for (var i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
-            if ('sha384-' + btoa(bin) === sriDiharapkan) return jaringan;
-            return 'hash SRI tidak cocok — berkas CDN berbeda dari yang di-hash';
-          });
-        });
-      })
-      .catch(function () { return jaringan; });
-  } catch (e) {
-    return Promise.resolve(jaringan);
-  }
-}
 
 /**
  * Muat MapLibre GL JS (CSS + JS) dari CDN. Dipanggil sekali; pemanggilan
@@ -91,26 +39,22 @@ function muatMapLibre() {
 
   __maplibreDimuat = new Promise(function (resolve, reject) {
     var timeout = setTimeout(function () {
-      reject(new Error('waktu muat habis (8 detik) — jaringan lambat ke CDN'));
+      reject(new Error('waktu muat habis (8 detik) — pustaka peta tidak termuat'));
     }, 8000);
 
-    // CSS — dengan SRI integrity
+    // CSS — dari vendor lokal (same-origin, tanpa SRI/CORS)
     if (!document.querySelector('link[data-maplibre]')) {
       var link = document.createElement('link');
       link.rel = 'stylesheet';
-      link.href = PETA_CDN + 'maplibre-gl.css';
-      link.integrity = PETA_SRI_CSS;
-      link.crossOrigin = 'anonymous';
+      link.href = PETA_MAPLIBRE_CSS;
       link.setAttribute('data-maplibre', '1');
       document.head.appendChild(link);
     }
 
-    // JS — dengan SRI integrity
+    // JS — dari vendor lokal (same-origin, tanpa SRI/CORS)
     if (!document.querySelector('script[data-maplibre]')) {
       var s = document.createElement('script');
-      s.src = PETA_CDN + 'maplibre-gl.js';
-      s.integrity = PETA_SRI_JS;
-      s.crossOrigin = 'anonymous';
+      s.src = PETA_MAPLIBRE_JS;
       s.setAttribute('data-maplibre', '1');
       s.onload = function () {
         clearTimeout(timeout);
@@ -119,9 +63,7 @@ function muatMapLibre() {
       };
       s.onerror = function () {
         clearTimeout(timeout);
-        alasanGagalMuat(s.src, PETA_SRI_JS).then(function (alasan) {
-          reject(new Error(alasan));
-        });
+        reject(new Error('pustaka peta gagal dimuat dari penyimpanan lokal'));
       };
       document.head.appendChild(s);
     } else {
@@ -169,11 +111,13 @@ function petaBuat(el, opts) {
       interactive: opts.interaktif !== false
     });
 
-    // Tambah kontrol zoom
-    peta.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottomright');
+    // Tambah kontrol zoom (kanan bawah). Posisi MapLibre memakai hubung:
+    // 'bottom-right', bukan 'bottomright' gaya Leaflet — nilai lain membuat
+    // addControl melempar galat dan peta gagal total.
+    peta.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
 
-    // Tambah kontrol atribusi (sudut kiri bawah)
-    peta.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottomleft');
+    // Tambah kontrol atribusi (kiri bawah)
+    peta.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
 
     var sudahHancur = false;
 
@@ -255,7 +199,43 @@ function petaBuat(el, opts) {
       try { peta.remove(); } catch (e) {}
     }
 
-    return { peta: peta, lapisanLingkaran: lapisanLingkaran, lapisanPenanda: lapisanPenanda, hapusLapisan: hapusLapisan, hapusPenanda: hapusPenanda, hancurkan: hancurkan };
+    var handle = { peta: peta, lapisanLingkaran: lapisanLingkaran, lapisanPenanda: lapisanPenanda, hapusLapisan: hapusLapisan, hapusPenanda: hapusPenanda, hancurkan: hancurkan };
+
+    // Janji hanya resolve SETELAH gaya siap menerima addSource/addLayer.
+    // Bila resolve lebih awal, pemanggil memanggil lapisanLingkaran() lalu
+    // melempar "Style is not done loading" dan peta gagal total.
+    //
+    // Gerbangnya diuji LANGSUNG (probe addSource+removeSource) karena
+    // isStyleLoaded() tidak sejalan dengan kesiapan addSource, sedangkan
+    // event 'load' baru menyusul setelah seluruh ubin (bisa >4 detik).
+    function gayaSiap() {
+      try {
+        peta.addSource('__probe', {
+          type: 'geojson',
+          data: { type: 'Feature', geometry: { type: 'Point', coordinates: [0, 0] }, properties: {} }
+        });
+        peta.removeSource('__probe');
+        return true;
+      } catch (e) { return false; }
+    }
+
+    return new Promise(function (resolve, reject) {
+      var sudahSelesai = false;
+      function beres(ok, alasan) {
+        if (sudahSelesai) return;
+        sudahSelesai = true;
+        clearTimeout(timer); clearInterval(poll);
+        if (ok) resolve(handle);
+        else { hancurkan(); reject(new Error(alasan)); }
+      }
+      if (gayaSiap()) { beres(true); return; }
+      var timer = setTimeout(function () {
+        beres(false, 'gaya peta gagal dimuat (jaringan ke server ubin)');
+      }, 12000);
+      var poll = setInterval(function () {
+        if (gayaSiap()) beres(true);
+      }, 200);
+    });
   });
 }
 
